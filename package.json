@@ -1,0 +1,29 @@
+{
+  "name": "frolyk",
+  "version": "1.0.0",
+  "description": "Stream processing library for Kafka in Node",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublish": "npm run build",
+    "watch": "tsc -w",
+    "test": "tap --100"
+  },
+  "keywords": [
+    "kafka",
+    "kafka-streams",
+    "stream-processing",
+    "kafkajs"
+  ],
+  "author": "JaapRood",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "^12.6.8",
+    "tap": "^14.4.3",
+    "typescript": "^3.5.3"
+  }
+}
