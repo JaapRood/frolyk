@@ -20,6 +20,10 @@
     "kafkajs"
   ],
   "author": "JaapRood",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JaapRood/frolyk.git"
+  },
   "license": "ISC",
   "dependencies": {
     "@types/node": "^12.6.8",
