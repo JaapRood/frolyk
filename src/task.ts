@@ -1,9 +1,6 @@
 import EventEmitter from 'events'
-
-interface Source {
-	topicName: string,
-	processors: []
-}
+import Source from './source'
+import createLocalAssignmentContext from './assignment-contexts/local'
 
 class Task {
 	events: EventEmitter
@@ -40,6 +37,16 @@ class Task {
 		return {
 			...source,
 			processors: [...source.processors, setupProcessing]
+		}
+	}
+
+	inject(assignments: Array<{ topic, partition }>) {
+		const contexts = createLocalAssignmentContext(assignments, this)
+
+		return {
+			inject() {},
+			committedOffsets: [],
+			sentMessages: []
 		}
 	}
 }

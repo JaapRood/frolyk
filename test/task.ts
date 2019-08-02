@@ -36,4 +36,14 @@ Tap.test('Task', async (t) => {
 			otherTask.process(source, () => {})
 		})
 	})
+
+	t.test('Task.inject', async (t) => {
+		const task = createTask()
+
+		const source = task.source('test-topic')
+		task.process(source, () => {})
+
+		const testInterface = task.inject([{ topic: 'test-topic', partition: 0 }])
+		testInterface.inject()
+	})
 })
