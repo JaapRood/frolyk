@@ -5,10 +5,12 @@ import createLocalAssignmentContext from './assignment-contexts/local'
 class Task {
 	events: EventEmitter
 	sources: Array<Source>
+	group: string
 
-	constructor() {
+	constructor({ group } : { group: string }) {
 		this.events = new EventEmitter()
 		this.sources = []
+		this.group = group
 	}
 
 	source(topicName) : Source {
@@ -34,16 +36,18 @@ class Task {
 			throw new Error('Source must be created through same task that processes it')
 		}
 
-		return {
-			...source,
-			processors: [...source.processors, setupProcessing]
-		}
+		existingSource.processors.push(setupProcessing)
+
+		return existingSource
 	}
 
-	inject(assignments: Array<{ topic, partition }>) {
-		const contexts = assignments.map((assignment) => {
-			const source = this.sources.find(({ topicName }) => topicName === assignment.topic)
+	inject(assignments: Array<{ topic: string, partition: number }>) {
+		const group = this.group
 
+		const contexts = assignments.map(({ topic, partition }) => {
+			const source = this.sources.find(({ topicName }) => topicName === topic)
+
+			const assignment = { topic, partition, group }
 			const processors = source ? source.processors : []
 
 			return createLocalAssignmentContext({ assignment, processors })
@@ -58,6 +62,6 @@ class Task {
 	}
 }
 
-export default function createTask() : Task {
-	return new Task()
+export default function createTask(config : { group: string }) : Task {
+	return new Task(config)
 }

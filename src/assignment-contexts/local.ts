@@ -1,8 +1,16 @@
-import createContext, { AssignmentContext } from '.'
+import createContextInterface, { AssignmentContext } from '.'
 
-export default function({
+const createContext : createContextInterface = function({
 	assignment,
 	processors
 }) {
-	return assignment
+	const context = { 
+		topic: assignment.topic,
+		partition: assignment.partition,
+		group: assignment.group
+	}
+
+	return context
 }
+
+export default createContext

@@ -15,7 +15,6 @@ export interface AssignmentContext {
 export default interface {
 	({ 
 		assignment: Assignment,
-		processors: Array<(assignment: Assignment) : Promise<any>>
-		log?: ,
+		processors: any
 	}): AssignmentContext
 }

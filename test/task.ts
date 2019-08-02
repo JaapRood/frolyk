@@ -4,12 +4,12 @@ import createTask from '../src/task'
 Tap.test('Task', async (t) => {
 	t.test('can be constructed', async (t) => {
 		t.doesNotThrow(() => {
-			createTask()
+			createTask({ group: 'test-group' })
 		})
 	})
 
 	t.test('Task.source', async (t) => {
-		const task = createTask()
+		const task = createTask({ group: 'test-group' })
 
 
 		// TODO: figure out how to test whether something throws in Javascript.. separate tests?
@@ -20,17 +20,22 @@ Tap.test('Task', async (t) => {
 		// })
 
 		const source = task.source('test-topic')
-		const sameSource = task.source('test-topic')	
+		const sameSource = task.source('test-topic')
 	})
 
 	t.test('Task.process', async (t) => {
-		const task = createTask()
+		const task = createTask({ group: 'test-group' })
 
 		const source = task.source('test-topic')
 
-		task.process(source, () => {})
+		const testProcessor = () => {}
+		const updatedSource = task.process(source, testProcessor)
 
-		const otherTask = createTask()
+		t.equal(updatedSource.processors.length, 1)
+		t.equal(updatedSource.processors[0], testProcessor)
+		t.ok(task.sources.includes(updatedSource))
+
+		const otherTask = createTask({ group: 'test-group' })
 
 		t.throws(() => {
 			otherTask.process(source, () => {})
@@ -38,7 +43,7 @@ Tap.test('Task', async (t) => {
 	})
 
 	t.test('Task.inject', async (t) => {
-		const task = createTask()
+		const task = createTask({ group: 'test-group' })
 
 		const source = task.source('test-topic')
 		task.process(source, () => {})
