@@ -22,4 +22,18 @@ Tap.test('Task', async (t) => {
 		const source = task.source('test-topic')
 		const sameSource = task.source('test-topic')	
 	})
+
+	t.test('Task.process', async (t) => {
+		const task = createTask()
+
+		const source = task.source('test-topic')
+
+		task.process(source, () => {})
+
+		const otherTask = createTask()
+
+		t.throws(() => {
+			otherTask.process(source, () => {})
+		})
+	})
 })
