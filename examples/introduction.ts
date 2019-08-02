@@ -27,4 +27,6 @@ task.process(locationEvents, async (assignment) => {
 	}
 })
 
+// task.inject()
+
 await task.start()
