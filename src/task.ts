@@ -41,9 +41,16 @@ class Task {
 	}
 
 	inject(assignments: Array<{ topic, partition }>) {
-		const contexts = createLocalAssignmentContext(assignments, this)
+		const contexts = assignments.map((assignment) => {
+			const source = this.sources.find(({ topicName }) => topicName === assignment.topic)
+
+			const processors = source ? source.processors : []
+
+			return createLocalAssignmentContext({ assignment, processors })
+		})
 
 		return {
+			/* istanbul ignore next */
 			inject() {},
 			committedOffsets: [],
 			sentMessages: []

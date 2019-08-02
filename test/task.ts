@@ -44,6 +44,6 @@ Tap.test('Task', async (t) => {
 		task.process(source, () => {})
 
 		const testInterface = task.inject([{ topic: 'test-topic', partition: 0 }])
-		testInterface.inject()
+		const otherInterface = task.inject([{ topic: 'not-processing-this-topic', partition: 0 }])
 	})
 })

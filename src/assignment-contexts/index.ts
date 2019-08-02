@@ -1,11 +1,21 @@
 import Source from './source'
 
+interface Assignment {
+	topic: string,
+	partition: number,
+	group: string
+}
+
 export interface AssignmentContext {
 	topic: string,
-	partition: 0,
+	partition: number,
 	group: string
 }
 
 export default interface {
-	(assignments, task): Array<AssignmentContext>
+	({ 
+		assignment: Assignment,
+		processors: Array<(assignment: Assignment) : Promise<any>>
+		log?: ,
+	}): AssignmentContext
 }
