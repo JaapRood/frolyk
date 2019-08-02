@@ -27,4 +27,13 @@ task.process(locationEvents, async (assignment) => {
 	}
 })
 
-await task.start()
+const testInterface = await task.inject([{ topic: 'location-events', partition: 0 }])
+
+const testLocation = {
+	latitude: 4,
+	longitude: 10,
+	timestamp: Date.now()
+}
+testInterface.inject({ topic: 'location-events', partition: 0, key: null, testLocation })
+
+console.log(testInterface.committedMessages) // should contain offset of message
