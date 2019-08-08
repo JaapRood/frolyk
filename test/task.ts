@@ -29,7 +29,7 @@ Tap.test('Task', async (t) => {
 		const source = task.source('test-topic')
 
 		const testProcessor = () => {}
-		const updatedSource = task.process(source, testProcessor)
+		const updatedSource = task.processor(source, testProcessor)
 
 		t.equal(updatedSource.processors.length, 1)
 		t.equal(updatedSource.processors[0], testProcessor)
@@ -38,7 +38,7 @@ Tap.test('Task', async (t) => {
 		const otherTask = createTask({ group: 'test-group' })
 
 		t.throws(() => {
-			otherTask.process(source, () => {})
+			otherTask.processor(source, () => {})
 		})
 	})
 
@@ -46,7 +46,7 @@ Tap.test('Task', async (t) => {
 		const task = createTask({ group: 'test-group' })
 
 		const source = task.source('test-topic')
-		task.process(source, () => {})
+		task.processor(source, () => {})
 
 		const testInterface = task.inject([{ topic: 'test-topic', partition: 0 }])
 		const otherInterface = task.inject([{ topic: 'not-processing-this-topic', partition: 0 }])

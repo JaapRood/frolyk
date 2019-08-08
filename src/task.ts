@@ -30,7 +30,7 @@ class Task {
 		return newSource
 	}
 
-	process(source: Source, setupProcessing) {
+	processor(source: Source, setupProcessing) {
 		const existingSource = this.sources.find(({ topicName }) => source.topicName === topicName)
 		if (!existingSource) {
 			throw new Error('Source must be created through same task that processes it')

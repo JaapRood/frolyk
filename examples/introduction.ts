@@ -4,7 +4,7 @@ const task = createTask()
 
 const locationEvents = task.source('location-events')
 
-task.process(locationEvents, async (assignment) => {
+task.processor(locationEvents, async (assignment) => {
 	// Called when Consumer receives assignment through a rebalance, or manual assignment.__dirname
 
 	// Do any setup work here.
