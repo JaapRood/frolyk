@@ -1,5 +1,6 @@
 import Tap from 'tap'
 import createTask from '../src/task'
+import { spy } from 'sinon'
 
 Tap.test('Task', async (t) => {
 	t.test('can be constructed', async (t) => {
@@ -43,12 +44,22 @@ Tap.test('Task', async (t) => {
 	})
 
 	t.test('Task.inject', async (t) => {
-		const task = createTask({ group: 'test-group' })
+		let task, source
 
-		const source = task.source('test-topic')
-		task.processor(source, () => {})
+		const testGroup = 'test-group'
+		const testTopic = 'test-topic'
 
-		const testInterface = task.inject([{ topic: 'test-topic', partition: 0 }])
-		const otherInterface = task.inject([{ topic: 'not-processing-this-topic', partition: 0 }])
+		t.beforeEach(async () => {
+			task = createTask({ group: testGroup })
+			source = task.source(testTopic)
+		})
+
+		await t.test('returns a test interface', async (t) => {
+			task.processor(source, () => {})
+
+			const testInterface = task.inject([{ topic: 'test-topic', partition: 0 }])
+			const otherInterface = task.inject([{ topic: 'not-processing-this-topic', partition: 0 }])
+		})
+
 	})
 })

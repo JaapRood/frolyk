@@ -26,8 +26,14 @@
   },
   "license": "ISC",
   "dependencies": {
+    "@types/highland": "^2.12.3",
     "@types/node": "^12.6.8",
+    "highland": "^2.13.5",
     "tap": "^14.4.3",
     "typescript": "^3.5.3"
+  },
+  "devDependencies": {
+    "@types/sinon": "^7.0.13",
+    "sinon": "^7.4.1"
   }
 }

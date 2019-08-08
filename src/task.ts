@@ -41,24 +41,19 @@ class Task {
 		return existingSource
 	}
 
-	inject(assignments: Array<{ topic: string, partition: number }>) {
+	async inject(assignments: Array<{ topic: string, partition: number }>) {
 		const group = this.group
 
-		const contexts = assignments.map(({ topic, partition }) => {
+		const contexts = await Promise.all(assignments.map(async ({ topic, partition }) => {
 			const source = this.sources.find(({ topicName }) => topicName === topic)
 
 			const assignment = { topic, partition, group }
 			const processors = source ? source.processors : []
 
-			return createLocalAssignmentContext({ assignment, processors })
-		})
+			return await createLocalAssignmentContext({ assignment, processors })
+		}))
 
-		return {
-			/* istanbul ignore next */
-			inject() {},
-			committedOffsets: [],
-			sentMessages: []
-		}
+		return contexts
 	}
 }
 

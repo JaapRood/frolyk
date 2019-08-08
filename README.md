@@ -12,10 +12,12 @@ Total work in progress, nothing functional yet, but eventually like [Kafka Strea
 - [ ] Simple `Worker` / `App` construct to run multiple tasks in a single process
 - [ ] Propagation of errors
 - [ ] Simple logging
-- [ ] Very *very* few dependencies: KafkaJS, Long? 
+- [ ] Very few dependencies: KafkaJS, Long?, Highland
 - [ ] Idiomatic Node, no straight up copy of Java Processor API.
 - [ ] 100% Test coverage
 
 ## Later goals
+- [ ] Replace Highland streams with custom Node Streams
+- [ ] Very *very* few dependencies: KafkaJS, Long?
 - [ ] Basic store support
 - [ ] Basic scheduling / windowing
