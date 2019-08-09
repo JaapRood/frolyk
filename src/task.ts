@@ -41,7 +41,13 @@ class Task {
 		return existingSource
 	}
 
-	async inject(assignments: Array<{ topic: string, partition: number }>) {
+	async inject(assignments: { topic: string, partition: number})
+	async inject(assignments: Array<{ topic: string, partition: number }>)
+	async inject(assignments: any) {
+		const multiple = Array.isArray(assignments)
+
+		assignments = [].concat(assignments) // normalize to array
+
 		const group = this.group
 
 		const contexts = await Promise.all(assignments.map(async ({ topic, partition }) => {
@@ -53,7 +59,7 @@ class Task {
 			return await createLocalAssignmentContext({ assignment, processors })
 		}))
 
-		return contexts
+		return multiple ? contexts : contexts[0]
 	}
 }
 

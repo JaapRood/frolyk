@@ -57,8 +57,15 @@ Tap.test('Task', async (t) => {
 		await t.test('returns a test interface', async (t) => {
 			task.processor(source, () => {})
 
-			const testInterface = task.inject([{ topic: 'test-topic', partition: 0 }])
-			const otherInterface = task.inject([{ topic: 'not-processing-this-topic', partition: 0 }])
+			const testInterfaces = await task.inject([{ topic: 'test-topic', partition: 0 }])
+
+			t.ok(Array.isArray(testInterfaces), 'returns an array of test assignment interfaces')
+
+			const singleInterface = await task.inject({ topic: 'test-topic', partition: 0 })
+			t.notOk(Array.isArray(singleInterface), 'returns a single test assignment interface when injecting a single assignment')
+
+			const otherInterface = await task.inject({ topic: 'not-processing-this-topic', partition: 0 })
+			t.ok(otherInterface, 'returns a test assignment interface for unknown topics')
 		})
 
 		await t.test('test interface can inject messages', async () => {
@@ -69,8 +76,7 @@ Tap.test('Task', async (t) => {
 
 			task.processor(source, processorSetup)
 
-			// TODO: adapt task.inject to work with a single assignment
-			const [ testInterface ] = await task.inject([{ topic: testTopic, partition: 0 }])
+			const testInterface = await task.inject({ topic: testTopic, partition: 0 })
 			t.ok(processorSetup.calledOnce)
 
 			testInterface.inject({
