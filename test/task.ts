@@ -61,5 +61,25 @@ Tap.test('Task', async (t) => {
 			const otherInterface = task.inject([{ topic: 'not-processing-this-topic', partition: 0 }])
 		})
 
+		await t.test('test interface can inject messages', async () => {
+			const messageProcessor = spy()
+			const processorSetup = spy(() => {
+				return messageProcessor
+			})
+
+			task.processor(source, processorSetup)
+
+			// TODO: adapt task.inject to work with a single assignment
+			const [ testInterface ] = await task.inject([{ topic: testTopic, partition: 0 }])
+			t.ok(processorSetup.calledOnce)
+
+			testInterface.inject({
+				topic: testTopic,
+				partition: 0,
+				value: 'a-test-value'
+			})
+
+			t.ok(messageProcessor.calledOnce)
+		})	
 	})
 })
