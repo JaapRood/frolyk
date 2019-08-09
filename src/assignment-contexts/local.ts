@@ -1,9 +1,15 @@
 import H from 'highland'
 
+export interface AssignmentTestInterface {
+	inject(payload: { topic: string, partition: number, value: any })
+	committedOffsets: string[],
+	sentMessages: []
+}
+
 const createContext = async function({
 	assignment,
 	processors
-}) {
+}) : Promise<AssignmentTestInterface> {
 	var consumedOffset = 0
 
 	const stream = H()

@@ -1,6 +1,8 @@
 import EventEmitter from 'events'
 import Source from './source'
-import createLocalAssignmentContext from './assignment-contexts/local'
+import createLocalAssignmentContext, { AssignmentTestInterface } from './assignment-contexts/local'
+
+export AssignmentTestInterface
 
 class Task {
 	events: EventEmitter
@@ -41,8 +43,8 @@ class Task {
 		return existingSource
 	}
 
-	async inject(assignments: { topic: string, partition: number})
-	async inject(assignments: Array<{ topic: string, partition: number }>)
+	async inject(assignments: { topic: string, partition: number}) : Promise<AssignmentTestInterface>
+	async inject(assignments: Array<{ topic: string, partition: number }>) : Promise<Array<AssignmentTestInterface>>
 	async inject(assignments: any) {
 		const multiple = Array.isArray(assignments)
 
