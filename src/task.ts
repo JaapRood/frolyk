@@ -2,7 +2,7 @@ import EventEmitter from 'events'
 import Source from './source'
 import createLocalAssignmentContext, { AssignmentTestInterface } from './assignment-contexts/local'
 
-export AssignmentTestInterface
+export { AssignmentTestInterface }
 
 class Task {
 	events: EventEmitter
