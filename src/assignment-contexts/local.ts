@@ -3,7 +3,7 @@ import H from 'highland'
 export interface AssignmentTestInterface {
 	inject(payload: { topic: string, partition: number, value: any })
 	committedOffsets: string[],
-	sentMessages: []
+	producedMessages: Highland.Stream<any>
 }
 
 const createContext = async function({
@@ -13,6 +13,20 @@ const createContext = async function({
 	var consumedOffset = 0
 
 	const stream = H()
+	const injectedMessages = []
+	const producedMessages = H()
+
+	const injectMessage = (payload : { topic: string, partition: number, value: any }) => {
+		const message = {
+			...payload, 
+			offset: 0
+		}
+
+		injectedMessages.push(message)
+		stream.write(message)
+
+		return message
+	} 
 
 	const context = {
 		/* istanbul ignore next */
@@ -39,8 +53,15 @@ const createContext = async function({
 		/* istanbul ignore next */
 		async seek(offset) {},
 
-		/* istanbul ignore next */
-		async send(messages) {},
+		async send(messages: Array<{ topic: string, partition: number, value: any}>) {
+			messages.forEach((message) => {
+				producedMessages.write(message)
+
+				if (message.topic === assignment.topic && message.partition === assignment.partition) {
+					injectMessage(message)
+				}
+			})
+		},
 
 		/* istanbul ignore next */
 		async watermarks() {},
@@ -56,7 +77,7 @@ const createContext = async function({
 	const processedStream = await processors.reduce(async (s, setupProcessor) => {
 		const stream = await s
 
-		const processMessage = await setupProcessor(assignment)
+		const processMessage = await setupProcessor(context)
 
 
 		return stream
@@ -70,18 +91,9 @@ const createContext = async function({
 	})
 
 	return {
-		inject(payload : { topic: string, partition: number, value: any }) {
-			const message = {
-				...payload, 
-				offset: 0
-			}
-
-			stream.write(message)
-
-			return message
-		},
+		inject: injectMessage,
 		committedOffsets: [],
-		sentMessages: []
+		producedMessages
 	}
 }
 
