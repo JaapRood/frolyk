@@ -3,7 +3,7 @@ import H from 'highland'
 export interface AssignmentTestInterface {
 	inject(payload: { topic: string, partition: number, value: any })
 	committedOffsets: string[],
-	producedMessages: Highland.Stream<any>
+	producedMessages: any[]
 }
 
 const createContext = async function({
@@ -14,7 +14,7 @@ const createContext = async function({
 
 	const stream = H()
 	const injectedMessages = []
-	const producedMessages = H()
+	const producedMessages = []
 
 	const injectMessage = (payload : { topic: string, partition: number, value: any }) => {
 		const message = {
@@ -55,7 +55,7 @@ const createContext = async function({
 
 		async send(messages: Array<{ topic: string, partition: number, value: any}>) {
 			messages.forEach((message) => {
-				producedMessages.write(message)
+				producedMessages.push(message)
 
 				if (message.topic === assignment.topic && message.partition === assignment.partition) {
 					injectMessage(message)

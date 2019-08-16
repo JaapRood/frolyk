@@ -42,7 +42,7 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			return processMessage
 		})
 
-		const producedMessages = await testInterface.producedMessages.take(3).collect().toPromise(Promise)
+		const producedMessages = testInterface.producedMessages
 
 		t.ok(processMessage.calledOnce, 'injects any messages sent to test assignment back into processor')
 		t.deepEqual(testMessages, producedMessages, 'messages can be sent in assignment setup')
