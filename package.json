@@ -27,8 +27,10 @@
   "license": "ISC",
   "dependencies": {
     "@types/highland": "^2.12.3",
+    "@types/long": "^4.0.0",
     "@types/node": "^12.6.8",
     "highland": "^2.13.5",
+    "long": "^4.0.0",
     "tap": "^14.4.3",
     "typescript": "^3.5.3"
   },

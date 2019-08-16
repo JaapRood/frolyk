@@ -1,4 +1,5 @@
 import H from 'highland'
+import Long from 'long'
 
 export interface AssignmentTestInterface {
 	inject(payload: { topic: string, partition: number, value: any })
@@ -6,23 +7,60 @@ export interface AssignmentTestInterface {
 	producedMessages: any[]
 }
 
+interface InternalMessage {
+	topic: string,
+	partition: number,
+	value: Buffer | null,
+	key: Buffer | null,
+	offset: Long
+}
+
+export interface Message {
+	topic: string,
+	partition: number,
+	value: Buffer | null,
+	key: Buffer | null,
+	offset: string
+}
+
 const createContext = async function({
 	assignment,
 	processors
 }) : Promise<AssignmentTestInterface> {
-	var consumedOffset = 0
+	let producedOffset = 0
 
-	const stream = H()
-	const injectedMessages = []
+	const stream : Highland.Stream<Message> = H()
+	const injectedMessages : InternalMessage[] = []
 	const producedMessages = []
 
-	const injectMessage = (payload : { topic: string, partition: number, value: any }) => {
-		const message = {
-			...payload, 
-			offset: 0
+	const injectMessage = (payload : { 
+		topic: string, 
+		partition: number, 
+		value?: any, 
+		key?: any 
+	}) : Message => {
+		const value = !payload.value ? null :
+			Buffer.isBuffer(payload.value) ? payload.value :
+			Buffer.from(JSON.stringify(payload.value))
+
+		const key = !payload.key ? null :
+			Buffer.isBuffer(payload.key) ? payload.key :
+			Buffer.from(JSON.stringify(payload.key))
+
+
+		const internalMessage = {
+			...payload,
+			value,
+			key,
+			offset: Long.fromNumber(++producedOffset - 1)
 		}
 
-		injectedMessages.push(message)
+		const message = {
+			...internalMessage,
+			offset: internalMessage.offset.toString()
+		}
+
+		injectedMessages.push(internalMessage)
 		stream.write(message)
 
 		return message
@@ -53,7 +91,7 @@ const createContext = async function({
 		/* istanbul ignore next */
 		async seek(offset) {},
 
-		async send(messages: Array<{ topic: string, partition: number, value: any}>) {
+		async send(messages: Array<{ topic: string, partition: number, value: any}>) : Promise<void> {
 			messages.forEach((message) => {
 				producedMessages.push(message)
 

@@ -79,13 +79,15 @@ Tap.test('Task', async (t) => {
 			const testInterface = await task.inject({ topic: testTopic, partition: 0 })
 			t.ok(processorSetup.calledOnce)
 
-			testInterface.inject({
+			const testMessage = {
 				topic: testTopic,
 				partition: 0,
 				value: 'a-test-value'
-			})
+			}
+			const injectedMessage = testInterface.inject(testMessage)
 
 			t.ok(messageProcessor.calledOnce)
-		})	
+			t.ok(messageProcessor.calledWith(injectedMessage))
+		})
 	})
 })
