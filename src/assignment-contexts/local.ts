@@ -25,9 +25,19 @@ export interface Message {
 
 const createContext = async function({
 	assignment,
-	processors
+	processors,
+	initialState
+}:{ 
+	assignment: any,
+	processors: any, 
+	initialState?: any
 }) : Promise<AssignmentTestInterface> {
 	let producedOffset = 0
+
+	initialState = {
+		messages: [],
+		...(initialState || {})
+	}
 
 	const stream : Highland.Stream<Message> = H()
 	const injectedMessages : InternalMessage[] = []
@@ -64,7 +74,7 @@ const createContext = async function({
 		stream.write(message)
 
 		return message
-	} 
+	}
 
 	const context = {
 		/* istanbul ignore next */
@@ -101,8 +111,15 @@ const createContext = async function({
 			})
 		},
 
-		/* istanbul ignore next */
-		async watermarks() {},
+		async watermarks() : Promise<{ highOffset: string, lowOffset: string }> {
+			const lastMessage = injectedMessages[injectedMessages.length - 1]
+			const firstMessage = injectedMessages[0]
+
+			return {
+				highOffset: lastMessage ? lastMessage.offset.add(1).toString() : '0',
+				lowOffset: firstMessage ? firstMessage.offset.toString() : '0'
+			}
+		},
 
 		stream,
 		topic: assignment.topic,
@@ -111,6 +128,8 @@ const createContext = async function({
 		// prefix: assignment.prefix
 		group: assignment.group
 	}
+
+	initialState.messages.forEach(injectMessage)
 
 	const processedStream = await processors.reduce(async (s, setupProcessor) => {
 		const stream = await s

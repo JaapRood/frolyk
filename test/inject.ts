@@ -9,10 +9,11 @@ Tap.test('Injected AssignmentContext', async (t) => {
 		partition: 0,
 		group: 'test-group'
 	}
-	const testProcessor = (setupProcessor, assignment = testAssignment) => {
+	const testProcessor = (setupProcessor, assignment = testAssignment, initialState = {}) => {
 		return createLocalAssignmentContext({
 			assignment,
-			processors: [ setupProcessor ]
+			processors: [ setupProcessor ],
+			initialState
 		})
 	}
 
@@ -76,6 +77,47 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			const expectedOffsets = testMessages.map((message, n) => `${n}`)
 
 			t.deepEqual(producedOffsets, expectedOffsets)
+		})
+	})
+
+	await t.test('assignment.watermarks', async (t) => {
+		const processMessage = spy()
+		const testMessages = [
+			{
+				topic: testAssignment.topic,
+				partition: testAssignment.partition,
+				value: 'a-test-value-a'
+			},
+			{
+				topic: 'some-other-topic',
+				partition: testAssignment.partition,
+				value: 'a-test-value-b'
+			},
+			{
+				topic: testAssignment.topic,
+				partition: testAssignment.partition + 1,
+				value: 'a-test-value-c'
+			}
+		]
+
+		let testInterface = await testProcessor(async (assignment) => {
+			const watermarks = await assignment.watermarks()
+
+			t.equal(watermarks.highOffset, '3', 'returns offset of the last message in the log + 1 as the high offset')
+			t.equal(watermarks.lowOffset, '0', 'returns offset of the first message in the log as the low offset')
+
+			return processMessage
+		}, testAssignment, {
+			messages: testMessages
+		})
+
+		testInterface = await testProcessor(async (assignment) => {
+			const watermarks = await assignment.watermarks()
+
+			t.equal(watermarks.highOffset, '0', 'returns high offset of 0 when message log is empty')
+			t.equal(watermarks.lowOffset, '0', 'returns low offset of 0 when message log is empty')
+
+			return processMessage
 		})
 	})
 
