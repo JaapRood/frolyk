@@ -32,13 +32,14 @@ const createContext = async function({
 	processors: any, 
 	initialState?: any
 }) : Promise<AssignmentTestInterface> {
-	let producedOffset = 0
 
 	initialState = {
+		lowOffset: 0,
 		messages: [],
 		...(initialState || {})
 	}
 
+	let producedOffset = initialState.lowOffset
 	const stream : Highland.Stream<Message> = H()
 	const injectedMessages : InternalMessage[] = []
 	const producedMessages = []

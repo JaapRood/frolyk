@@ -119,6 +119,18 @@ Tap.test('Injected AssignmentContext', async (t) => {
 
 			return processMessage
 		})
+
+		testInterface = await testProcessor(async (assignment) => {
+			const watermarks = await assignment.watermarks()
+
+			t.equal(watermarks.highOffset, '6', 'returns high offset of the last message in the log + 1')
+			t.equal(watermarks.lowOffset, '3', 'returns low ofset of the first message in the log')
+
+			return processMessage
+		}, testAssignment, {
+			lowOffset: 3,
+			messages: testMessages
+		})
 	})
 
 	await t.test('assignment.send', async (t) => {
