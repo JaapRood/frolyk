@@ -80,6 +80,7 @@ Tap.test('Injected AssignmentContext', async (t) => {
 		})
 	})
 
+
 	await t.test('assignment.watermarks', async (t) => {
 		const processMessage = spy()
 		const testMessages = [
@@ -131,6 +132,40 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			lowOffset: 3,
 			messages: testMessages
 		})
+	})
+
+	await t.test('assignment.caughtUp', async (t) => {
+		const processMessage = spy()
+		const testMessages = [
+			{
+				topic: testAssignment.topic,
+				partition: testAssignment.partition,
+				value: 'a-test-value-a'
+			},
+			{
+				topic: 'some-other-topic',
+				partition: testAssignment.partition,
+				value: 'a-test-value-b'
+			},
+			{
+				topic: testAssignment.topic,
+				partition: testAssignment.partition + 1,
+				value: 'a-test-value-c'
+			}
+		]
+
+		let testInterface = await testProcessor(async (assignment) => {
+			t.equal(await assignment.caughtUp(2), true)
+			t.equal(await assignment.caughtUp(1), false)
+			t.equal(await assignment.caughtUp(0), false)
+
+			return processMessage
+		}, testAssignment, {
+			lowOffset: 0,
+			messages: testMessages
+		})
+
+		// TODO: test use of logical offsets
 	})
 
 	await t.test('assignment.send', async (t) => {

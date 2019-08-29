@@ -77,9 +77,21 @@ const createContext = async function({
 		return message
 	}
 
+	const highOffset = () : Long => {
+		const lastMessage = injectedMessages[injectedMessages.length - 1]
+		return lastMessage ? lastMessage.offset.add(1) : Long.fromNumber(0)
+	}
+
+	const lowOffset = () : Long => {
+		const firstMessage = injectedMessages[0]
+		return firstMessage ? firstMessage.offset : Long.fromNumber(0)
+	}
+
 	const context = {
-		/* istanbul ignore next */
-		async caughtUp(offset) {},
+		async caughtUp(offset) {
+			// TODO: deal with logical offsets
+			return Long.fromValue(offset).add(1) >= highOffset()
+		},
 		
 		/* istanbul ignore next */
 		async commitOffset(offset, metadata = null) {},
@@ -113,12 +125,9 @@ const createContext = async function({
 		},
 
 		async watermarks() : Promise<{ highOffset: string, lowOffset: string }> {
-			const lastMessage = injectedMessages[injectedMessages.length - 1]
-			const firstMessage = injectedMessages[0]
-
 			return {
-				highOffset: lastMessage ? lastMessage.offset.add(1).toString() : '0',
-				lowOffset: firstMessage ? firstMessage.offset.toString() : '0'
+				highOffset: highOffset().toString(),
+				lowOffset: lowOffset().toString()
 			}
 		},
 
