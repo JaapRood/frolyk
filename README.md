@@ -8,14 +8,14 @@ Total work in progress, nothing functional yet, but eventually like [Kafka Strea
 - [ ] Kafka Stream Processor API for Node.js
 - [ ] `Task` construct to describe processor topologies and processing logic
 - [ ] Testing of processing logic without requiring a Kafka Cluster
-- [ ] Simple `Worker` / `App` construct to run multiple tasks in a single process
 - [ ] Propagation of errors
 - [ ] Simple logging
 - [ ] Very few dependencies: KafkaJS, Long?, Highland
 - [ ] Idiomatic Node, no straight up copy of Java Processor API.
-- [ ] 100% Test coverage
+- [x] 100% Test coverage
 
 ## Later goals
+- [ ] Simple `Worker` / `App` construct to run multiple tasks in a single process
 - [ ] Basic message parsing
 - [ ] Replace Highland streams with custom Node Streams
 - [ ] Very *very* few dependencies: KafkaJS, Long?
