@@ -282,5 +282,32 @@ Tap.test('Injected AssignmentContext', async (t) => {
 		await new Promise((r) => setTimeout(r, 500))
 
 		t.deepEqual(testInterface.processingResults, ['0', '1', '0', '1', '2'], 'allows consuming to be reversed to an absolute offset')
+
+		testInterface = await testProcessor(async (assignment) => {
+			await assignment.seek('3')
+
+			return processMessage
+		}, testAssignment, {
+			messages: [...testMessages, {
+				...testMessages[2],
+				offset: '4'
+			}]
+		})
+
+		await new Promise((r) => setTimeout(r, 500))
+
+		t.deepEqual(testInterface.processingResults, ['4'], 'will seek to next available offset when seeking to an offset that no longer exists (gc)')
+
+		testInterface = await testProcessor(async (assignment) => {
+			await assignment.seek('3')
+
+			return processMessage
+		}, testAssignment, {
+			messages: testMessages
+		})
+
+		await new Promise((r) => setTimeout(r, 500))
+
+		t.deepEqual(testInterface.processingResults, ['2'], 'will seek to the high water mark when offset is out of range')
 	})
 })
