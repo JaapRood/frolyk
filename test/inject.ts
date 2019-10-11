@@ -78,6 +78,32 @@ Tap.test('Injected AssignmentContext', async (t) => {
 
 			t.deepEqual(producedOffsets, expectedOffsets)
 		})
+
+		await t.test('can inject message with a predefined offset', async () => {
+			const testMessage = {
+				topic: testAssignment.topic,
+				partition: testAssignment.partition,
+				key: Buffer.from(JSON.stringify(4)),
+				value: Buffer.from('a-test-value'),
+				offset: '3'
+			}
+			
+			let injectedMessage = testInterface.inject(testMessage)
+
+			t.equal(injectedMessage.key, testMessage.key)
+			t.equal(injectedMessage.value, testMessage.value)
+			t.equal(injectedMessage.offset, testMessage.offset)
+
+			injectedMessage = testInterface.inject({ ...testMessage, offset: '6' })
+
+			t.equal(injectedMessage.offset, '6', 'allows predefined offsets to be non-contiguous')
+
+			t.throws(() => {
+				testInterface.inject( testInterface.inject({ ...testMessage, offset: '6' }))
+			}, 'does not allow a predefined offset that isnt higher than the last produced offset')
+
+
+		})
 	})
 
 
@@ -198,5 +224,63 @@ Tap.test('Injected AssignmentContext', async (t) => {
 
 		t.ok(processMessage.calledOnce, 'injects any messages sent to test assignment back into processor')
 		t.deepEqual(testMessages, producedMessages, 'messages can be sent in assignment setup')
+	})
+
+	await t.test('assignment.seek', async (t) => {
+		const processMessage = spy((message) => message.offset)
+		
+		const testMessages = [
+			{
+				topic: testAssignment.topic,
+				partition: testAssignment.partition,
+				value: 'a-test-value-a',
+				offset: '0'
+			},
+			{
+				topic: 'some-other-topic',
+				partition: testAssignment.partition,
+				value: 'a-test-value-b',
+				offset: '1',
+			},
+			{
+				topic: testAssignment.topic,
+				partition: testAssignment.partition,
+				value: 'a-test-value-c',
+				offset: '2'
+			}
+		]
+
+		let testInterface = await testProcessor(async (assignment) => {
+			await assignment.seek(testMessages[1].offset)
+
+			return processMessage
+		}, testAssignment, {
+			messages: testMessages
+		})
+
+		// TODO: add way to detect all messages injected thus far have been processed. 
+		// Perhaps something like `await testInterface.nextCatchUp()`?
+		// Or `testInterface.end()`, so we can stop the entire stream and just observe that? 
+		await new Promise((r) => setTimeout(r, 500))
+
+		t.deepEqual(testInterface.processingResults, ['1', '2'], 'allows consuming to be fast forwarded to an absolute offset')
+
+		testInterface = await testProcessor(async (assignment) => {
+			let processedMessages = 0
+
+			return async (message) => {
+				processedMessages++
+				if (processedMessages === testMessages.length - 1) {
+					await assignment.seek(testMessages[0].offset)
+				}
+				return message.offset
+			} 
+		}, testAssignment, {
+			messages: testMessages
+		})
+
+		await new Promise((r) => setTimeout(r, 500))
+
+		t.deepEqual(testInterface.processingResults, ['0', '1', '0', '1', '2'], 'allows consuming to be reversed to an absolute offset')
 	})
 })

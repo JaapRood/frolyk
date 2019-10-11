@@ -4,6 +4,8 @@ import Long from 'long'
 export interface AssignmentTestInterface {
 	inject(payload: { topic: string, partition: number, value: any })
 	committedOffsets: string[],
+	initialMessages: Message[],
+	processingResults: any[],
 	producedMessages: any[]
 }
 
@@ -39,7 +41,9 @@ const createContext = async function({
 		...(initialState || {})
 	}
 
-	let producedOffset = initialState.lowOffset
+	let producedOffset : number = initialState.lowOffset - 1
+	let consumedOffset : number = initialState.lowOffset - 1
+	let seekToOffset : number = -1
 	const stream : Highland.Stream<Message> = H()
 	const injectedMessages : InternalMessage[] = []
 	const producedMessages = []
@@ -48,7 +52,8 @@ const createContext = async function({
 		topic: string, 
 		partition: number, 
 		value?: any, 
-		key?: any 
+		key?: any,
+		offset?: string
 	}) : Message => {
 		const value = !payload.value ? null :
 			Buffer.isBuffer(payload.value) ? payload.value :
@@ -57,21 +62,33 @@ const createContext = async function({
 		const key = !payload.key ? null :
 			Buffer.isBuffer(payload.key) ? payload.key :
 			Buffer.from(JSON.stringify(payload.key))
+ 		
+ 		const offset = payload.offset && Long.fromValue(payload.offset) || Long.fromNumber(producedOffset + 1)
+		
+		if (offset.lte(producedOffset)) {
+			throw new Error('Offset of injected message must be at or higher than the current highwatermark')
+		}
 
+		producedOffset = offset.toNumber()
 
 		const internalMessage = {
 			...payload,
 			value,
 			key,
-			offset: Long.fromNumber(++producedOffset - 1)
+			offset
 		}
 
+		injectedMessages.push(internalMessage)
+
+		return writeMessageToStream(internalMessage)
+	}
+
+	const writeMessageToStream = (internalMessage : InternalMessage) : Message => {
 		const message = {
 			...internalMessage,
 			offset: internalMessage.offset.toString()
 		}
 
-		injectedMessages.push(internalMessage)
 		stream.write(message)
 
 		return message
@@ -111,8 +128,26 @@ const createContext = async function({
 		/* istanbul ignore next */
 		async heartbeat() {},
 
-		/* istanbul ignore next */
-		async seek(offset) {},
+		// TODO: support logical offsets
+		async seek(soughtOffset : string | Long) {
+			soughtOffset = Long.fromValue(soughtOffset)
+			
+			// resolve the requested offset to a message that has been injected
+			const closestIndex = injectedMessages.findIndex(({ offset }) => offset.gte(soughtOffset))
+			const soughtIndex = closestIndex > -1 ? closestIndex : 
+				injectedMessages.length - 1 // default to high water
+			const nextMessage = injectedMessages[soughtIndex]
+
+			// update the offset we're currently consuming or reset to start or end
+			seekToOffset = Long.fromValue(nextMessage.offset).toNumber()
+
+			// replay any messages if necessary
+			if (consumedOffset >= seekToOffset) {
+				setTimeout(() => { // out of context, to make sure seek completes before we process all th new messages
+					injectedMessages.slice(soughtIndex).forEach(writeMessageToStream)
+				})
+			}
+		},
 
 		async send(messages: Array<{ topic: string, partition: number, value: any}>) : Promise<void> {
 			messages.forEach((message) => {
@@ -139,7 +174,7 @@ const createContext = async function({
 		group: assignment.group
 	}
 
-	initialState.messages.forEach(injectMessage)
+	const initialMessages = initialState.messages.map(injectMessage)
 
 	const processedStream = await processors.reduce(async (s, setupProcessor) => {
 		const stream = await s
@@ -148,18 +183,31 @@ const createContext = async function({
 
 
 		return stream
-			.map(async (message) => await processMessage(message))
+			.filter(({ offset }) => {
+				if (seekToOffset > -1) {
+					return Long.fromValue(offset).equals(seekToOffset)
+				} else {
+					return true
+				}
+			})
+			.map(async (message) => {
+				consumedOffset = Long.fromValue(message.offset).toNumber()
+				seekToOffset = -1
+				return await processMessage(message)
+			})
 			.flatMap((awaitingProcessing) => H(awaitingProcessing))
 	}, Promise.resolve(stream))
 
-	const processedMessages = []
-	processedStream.each((message) => {
-		processedMessages.push(message)
+	const processingResults = []
+	processedStream.each((result) => {
+		processingResults.push(result)
 	})
 
 	return {
 		inject: injectMessage,
 		committedOffsets: [],
+		initialMessages,
+		processingResults,
 		producedMessages
 	}
 }
