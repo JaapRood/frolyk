@@ -258,10 +258,7 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			messages: testMessages
 		})
 
-		// TODO: add way to detect all messages injected thus far have been processed. 
-		// Perhaps something like `await testInterface.nextCatchUp()`?
-		// Or `testInterface.end()`, so we can stop the entire stream and just observe that? 
-		await new Promise((r) => setTimeout(r, 500))
+		await testInterface.caughtUp()
 
 		t.deepEqual(testInterface.processingResults, ['1', '2'], 'allows consuming to be fast forwarded to an absolute offset')
 
@@ -279,7 +276,7 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			messages: testMessages
 		})
 
-		await new Promise((r) => setTimeout(r, 500))
+		await testInterface.caughtUp()
 
 		t.deepEqual(testInterface.processingResults, ['0', '1', '0', '1', '2'], 'allows consuming to be reversed to an absolute offset')
 
@@ -294,7 +291,7 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			}]
 		})
 
-		await new Promise((r) => setTimeout(r, 500))
+		await testInterface.caughtUp()
 
 		t.deepEqual(testInterface.processingResults, ['4'], 'will seek to next available offset when seeking to an offset that no longer exists (gc)')
 
@@ -306,7 +303,7 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			messages: testMessages
 		})
 
-		await new Promise((r) => setTimeout(r, 500))
+		await testInterface.caughtUp()
 
 		t.deepEqual(testInterface.processingResults, ['2'], 'will seek to the high water mark when offset is out of range')
 
@@ -324,10 +321,9 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			messages: testMessages
 		})
 
-		await new Promise((r) => setTimeout(r, 500))
+		await testInterface.caughtUp()
 
 		t.deepEqual(testInterface.processingResults, ['0', '1', '0', '1', '2'], 'allows logical seeking to the earliest offset')
-
 
 		testInterface = await testProcessor(async (assignment) => {
 			let processedMessages = 0
@@ -343,7 +339,7 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			messages: testMessages
 		})
 
-		await new Promise((r) => setTimeout(r, 500))
+		await testInterface.caughtUp()
 
 		t.deepEqual(testInterface.processingResults, ['0', '2'], 'allows logical seeking to the latest offset')
 	})

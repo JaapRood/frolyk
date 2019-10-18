@@ -5,6 +5,7 @@ export interface AssignmentTestInterface {
 	inject(payload: { topic: string, partition: number, value: any })
 	committedOffsets: string[],
 	initialMessages: Message[],
+	caughtUp() : Promise<void>,
 	processingResults: any[],
 	producedMessages: any[]
 }
@@ -239,6 +240,13 @@ const createContext = async function({
 	return {
 		inject: injectMessage,
 		committedOffsets: [],
+		async caughtUp() {
+			await processedStream.observe()
+				.map(async () => context.caughtUp(consumedOffset))
+				.flatMap((awaiting) => H(awaiting))
+				.find((isCaughtUp) => isCaughtUp)
+				.toPromise(Promise)
+		},
 		initialMessages,
 		processingResults,
 		producedMessages
