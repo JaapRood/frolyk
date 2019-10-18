@@ -25,6 +25,39 @@ export interface Message {
 	offset: string
 }
 
+enum LogicalOffset {
+	Latest = -1,
+	Earliest = -2
+}
+
+enum LogicalLiteralOffset {
+	// latest
+	End = 'end',
+	Latest = 'latest',
+	Largest = 'largest',
+
+
+	// earliest
+	Beginning = 'beginning',
+	Earliest = 'earliest',
+	Smallest = 'smallest'
+}
+
+const earliestLogicalOffsets : any = [
+	LogicalOffset.Earliest,
+	LogicalLiteralOffset.Beginning,
+	LogicalLiteralOffset.Earliest,
+	LogicalLiteralOffset.Smallest
+]
+
+const latestLogicalOffsets : any = [
+	LogicalOffset.Latest,
+	LogicalLiteralOffset.End,
+	LogicalLiteralOffset.Latest,
+	LogicalLiteralOffset.Largest
+]
+
+
 const createContext = async function({
 	assignment,
 	processors,
@@ -128,12 +161,12 @@ const createContext = async function({
 		/* istanbul ignore next */
 		async heartbeat() {},
 
-		// TODO: support logical offsets
-		async seek(soughtOffset : string | Long) {
-			soughtOffset = Long.fromValue(soughtOffset)
-			
+		async seek(soughtOffset : string | Long | LogicalOffset | LogicalLiteralOffset) {
 			// resolve the requested offset to a message that has been injected
-			const closestIndex = injectedMessages.findIndex(({ offset }) => offset.gte(soughtOffset))
+			const absoluteOffset : Long = earliestLogicalOffsets.includes(soughtOffset) ? lowOffset() :
+				latestLogicalOffsets.includes(soughtOffset) ? highOffset() :
+				Long.fromValue(soughtOffset)
+			const closestIndex = injectedMessages.findIndex(({ offset }) => offset.gte(absoluteOffset))
 			const soughtIndex = closestIndex > -1 ? closestIndex : 
 				injectedMessages.length - 1 // default to high water
 			const nextMessage = injectedMessages[soughtIndex]

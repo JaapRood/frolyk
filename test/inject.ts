@@ -309,5 +309,42 @@ Tap.test('Injected AssignmentContext', async (t) => {
 		await new Promise((r) => setTimeout(r, 500))
 
 		t.deepEqual(testInterface.processingResults, ['2'], 'will seek to the high water mark when offset is out of range')
+
+		testInterface = await testProcessor(async (assignment) => {
+			let processedMessages = 0
+
+			return async (message) => {
+				processedMessages++
+				if (processedMessages === testMessages.length - 1) {
+					await assignment.seek('earliest')
+				}
+				return message.offset
+			} 
+		}, testAssignment, {
+			messages: testMessages
+		})
+
+		await new Promise((r) => setTimeout(r, 500))
+
+		t.deepEqual(testInterface.processingResults, ['0', '1', '0', '1', '2'], 'allows logical seeking to the earliest offset')
+
+
+		testInterface = await testProcessor(async (assignment) => {
+			let processedMessages = 0
+
+			return async (message) => {
+				processedMessages++
+				if (processedMessages === 1) {
+					await assignment.seek('latest')
+				}
+				return message.offset
+			} 
+		}, testAssignment, {
+			messages: testMessages
+		})
+
+		await new Promise((r) => setTimeout(r, 500))
+
+		t.deepEqual(testInterface.processingResults, ['0', '2'], 'allows logical seeking to the latest offset')
 	})
 })
