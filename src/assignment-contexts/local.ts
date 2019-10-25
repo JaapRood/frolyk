@@ -137,12 +137,12 @@ const createContext = async function({
 
 	const highOffset = () : Long => {
 		const lastMessage = injectedMessages[injectedMessages.length - 1]
-		return lastMessage ? lastMessage.offset.add(1) : Long.fromNumber(0)
+		return lastMessage ? lastMessage.offset.add(1) : Long.fromNumber(initialState.lowOffset)
 	}
 
 	const lowOffset = () : Long => {
 		const firstMessage = injectedMessages[0]
-		return firstMessage ? firstMessage.offset : Long.fromNumber(0)
+		return firstMessage ? firstMessage.offset : Long.fromNumber(initialState.lowOffset)
 	}
 
 	const context = {
@@ -170,8 +170,9 @@ const createContext = async function({
 			return Promise.resolve({...committedOffset})
 		},
 		
-		/* istanbul ignore next */
-		async isEmpty() {},
+		async isEmpty() {
+			return Promise.resolve(highOffset().subtract(lowOffset()).lte(0))
+		},
 		
 		/* istanbul ignore next */
 		async log(tags, payload) {},

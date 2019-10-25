@@ -471,4 +471,45 @@ Tap.test('Injected AssignmentContext', async (t) => {
 
 		t.deepEqual(testInterface.committedOffsets, testInterface.processingResults, 'allows committed offset to be queried during processing of messages')
 	})
+
+	await t.test('assignment.isEmpty', async (t) => {
+		const processMessage = spy()
+
+		const testMessages = [
+			{
+				topic: testAssignment.topic,
+				partition: testAssignment.partition,
+				value: 'a-test-value-a'
+			},
+			{
+				topic: 'some-other-topic',
+				partition: testAssignment.partition,
+				value: 'a-test-value-b'
+			},
+			{
+				topic: testAssignment.topic,
+				partition: testAssignment.partition,
+				value: 'a-test-value-c'
+			}
+		]
+
+		await testProcessor(async (assignment) => {
+			t.equal(await assignment.isEmpty(), true, 'resolves to true when log is empty')
+			return processMessage
+		}, testAssignment)
+
+		await testProcessor(async (assignment) => {
+			t.equal(await assignment.isEmpty(), false, 'resolves to false when log contains messages to consume')
+			return processMessage
+		}, testAssignment, {
+			messages: testMessages
+		})
+
+		await testProcessor(async (assignment) => {
+			t.equal(await assignment.isEmpty(), true, 'resolves to true when log contains no messages to consume, but might have in the past')
+			return processMessage
+		}, testAssignment, {
+			lowOffset: 3
+		})
+	})
 })
