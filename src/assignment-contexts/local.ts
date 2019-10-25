@@ -175,15 +175,6 @@ const createContext = async function({
 		
 		/* istanbul ignore next */
 		async log(tags, payload) {},
-		
-		/* istanbul ignore next */
-		async pause() {},
-
-		/* istanbul ignore next */
-		async resume() {},
-
-		/* istanbul ignore next */
-		async heartbeat() {},
 
 		async seek(soughtOffset : string | Long | LogicalOffset | LogicalLiteralOffset) {
 			// resolve the requested offset to a message that has been injected

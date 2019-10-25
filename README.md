@@ -17,6 +17,7 @@ Total work in progress, nothing functional yet, but eventually like [Kafka Strea
 ## Later goals
 - [ ] Simple `Worker` / `App` construct to run multiple tasks in a single process
 - [ ] Basic message parsing
+- [ ] Support long-running processing jobs (> session timeout through heartbeating / pause & resume)
 - [ ] Replace Highland streams with custom Node Streams
 - [ ] Very *very* few dependencies: KafkaJS, Long?
 - [ ] Basic store support
