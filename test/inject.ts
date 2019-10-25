@@ -343,4 +343,78 @@ Tap.test('Injected AssignmentContext', async (t) => {
 
 		t.deepEqual(testInterface.processingResults, ['0', '2'], 'allows logical seeking to the latest offset')
 	})
+
+	await t.test('assignment.commitOffset', async (t) => {
+		const processMessage = spy((message) => message.offset)
+		
+		const testMessages = [
+			{
+				topic: testAssignment.topic,
+				partition: testAssignment.partition,
+				value: 'a-test-value-a',
+				offset: '0'
+			},
+			{
+				topic: 'some-other-topic',
+				partition: testAssignment.partition,
+				value: 'a-test-value-b',
+				offset: '1',
+			},
+			{
+				topic: testAssignment.topic,
+				partition: testAssignment.partition,
+				value: 'a-test-value-c',
+				offset: '2'
+			}
+		]
+
+		let testInterface = await testProcessor(async (assignment) => {
+			await assignment.commitOffset(testMessages[1].offset)
+
+			return processMessage
+		}, testAssignment)
+
+		t.deepEqual(testInterface.committedOffsets, [{ offset: '1', metadata: null }], 'allows absolute offsets to be committed during assignment setup')
+
+		
+		testInterface = await testProcessor(async (assignment) => {
+			return async ({ offset }) => {
+				await assignment.commitOffset(offset)
+
+				return offset
+			}
+		}, testAssignment, {
+			messages: testMessages
+		})
+
+		await testInterface.caughtUp()
+
+		t.deepEqual(testInterface.committedOffsets, [
+			{ offset: '0', metadata: null },
+			{ offset: '1', metadata: null },
+			{ offset: '2', metadata: null }
+		], 'allows absoulte offsets to be committed during processing of messages')
+
+
+		testInterface = await testProcessor(async (assignment) => {
+			await assignment.commitOffset(testMessages[1].offset, 'test-metadata')
+
+			return processMessage
+		}, testAssignment)
+
+		t.deepEqual(testInterface.committedOffsets, [{ offset: '1', metadata: 'test-metadata' }], 'allows a string of metatdata to be committed with the offset')
+
+
+		await testProcessor(async (assignment) => {
+			t.rejects(() => assignment.commitOffset('not-an-offset'))
+
+			return processMessage
+		}, testAssignment)
+
+		await testProcessor(async (assignment) => {
+			t.rejects(() => assignment.commitOffset('-2'))
+
+			return processMessage
+		}, testAssignment)
+	})
 })

@@ -3,7 +3,7 @@ import Long from 'long'
 
 export interface AssignmentTestInterface {
 	inject(payload: { topic: string, partition: number, value: any })
-	committedOffsets: string[],
+	committedOffsets: OffsetAndMetadata[],
 	initialMessages: Message[],
 	caughtUp() : Promise<void>,
 	processingResults: any[],
@@ -24,6 +24,11 @@ export interface Message {
 	value: Buffer | null,
 	key: Buffer | null,
 	offset: string
+}
+
+export interface OffsetAndMetadata {
+	offset: string,
+	metadata: string | null
 }
 
 enum LogicalOffset {
@@ -78,7 +83,9 @@ const createContext = async function({
 	let producedOffset : number = initialState.lowOffset - 1
 	let consumedOffset : number = initialState.lowOffset - 1
 	let seekToOffset : number = -1
+	let committedOffset : OffsetAndMetadata = { offset: '-1', metadata: null }
 	const stream : Highland.Stream<Message> = H()
+	const committedOffsets : OffsetAndMetadata[] = []
 	const injectedMessages : InternalMessage[] = []
 	const producedMessages = []
 
@@ -144,8 +151,20 @@ const createContext = async function({
 			return Long.fromValue(offset).add(1) >= highOffset()
 		},
 		
-		/* istanbul ignore next */
-		async commitOffset(offset, metadata = null) {},
+		async commitOffset(newOffset : string | Long, metadata : string | null = null) {
+			newOffset = Long.fromValue(newOffset)
+
+			if (newOffset.lte(-1)) {
+				throw new Error('Offset must be a valid absolute offset to commit it')
+			}
+
+			const offset = { offset: newOffset.toString(), metadata }
+
+			committedOffset = offset
+			committedOffsets.push(offset)
+
+			return Promise.resolve()
+		},
 		
 		/* istanbul ignore next */
 		async isEmpty() {},
@@ -239,7 +258,7 @@ const createContext = async function({
 
 	return {
 		inject: injectMessage,
-		committedOffsets: [],
+		committedOffsets,
 		async caughtUp() {
 			await processedStream.observe()
 				.map(async () => context.caughtUp(consumedOffset))
