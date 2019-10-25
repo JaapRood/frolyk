@@ -165,6 +165,10 @@ const createContext = async function({
 
 			return Promise.resolve()
 		},
+
+		async committed() : Promise<OffsetAndMetadata> {
+			return Promise.resolve({...committedOffset})
+		},
 		
 		/* istanbul ignore next */
 		async isEmpty() {},

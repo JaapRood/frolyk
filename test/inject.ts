@@ -417,4 +417,58 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			return processMessage
 		}, testAssignment)
 	})
+
+	await t.test('assignment.committed', async (t) => {
+		const processMessage = spy((message) => message.offset)
+
+		const testMessages = [
+			{
+				topic: testAssignment.topic,
+				partition: testAssignment.partition,
+				value: 'a-test-value-a',
+				offset: '0'
+			},
+			{
+				topic: 'some-other-topic',
+				partition: testAssignment.partition,
+				value: 'a-test-value-b',
+				offset: '1',
+			},
+			{
+				topic: testAssignment.topic,
+				partition: testAssignment.partition,
+				value: 'a-test-value-c',
+				offset: '2'
+			}
+		]
+
+		await testProcessor(async (assignment) => {
+			t.deepEqual(
+				await assignment.committed(), 
+				{ offset: -1, metadata: null },
+				'allows currently committed offset to be queried during assignment setup')
+			await assignment.commitOffset('2', 'test-metadata')
+			t.deepEqual(
+				await assignment.committed(),
+				{ offset: '2', metadata: 'test-metadata' },
+				'returns metadata set with committed offset'
+			)
+
+			return processMessage
+		}, testAssignment)
+
+		let testInterface = await testProcessor(async (assignment) => {
+			return async ({ offset }) => {
+				await assignment.commitOffset(offset)
+
+				return await assignment.committed()
+			}
+		}, testAssignment, {
+			messages: testMessages
+		})
+
+		await testInterface.caughtUp()
+
+		t.deepEqual(testInterface.committedOffsets, testInterface.processingResults, 'allows committed offset to be queried during processing of messages')
+	})
 })
