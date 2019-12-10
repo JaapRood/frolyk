@@ -1,6 +1,8 @@
 import EventEmitter from 'events'
 import Source from './source'
 import createLocalAssignmentContext, { AssignmentTestInterface } from './assignment-contexts/local'
+import { Kafka, logLevel as LOG_LEVELS } from 'kafkajs'
+import Uuid from 'uuid/v4'
 
 export { AssignmentTestInterface }
 
@@ -8,11 +10,21 @@ class Task {
 	events: EventEmitter
 	sources: Array<Source>
 	group: string
+	options: {
+		consumer?: any,
+		connection?: any
+	}
 
-	constructor({ group } : { group: string }) {
+	consumer?: any
+
+	constructor({ group, connection, consumer } : { group: string, connection?: any, consumer?: any }) {
 		this.events = new EventEmitter()
 		this.sources = []
 		this.group = group
+		this.options = {
+			connection,
+			consumer
+		}
 	}
 
 	source(topicName) : Source {
@@ -62,6 +74,43 @@ class Task {
 		}))
 
 		return multiple ? contexts : contexts[0]
+	}
+
+	async start() {
+		if (!this.options.connection) {
+			throw new Error('Task must be configured with kafka connection options to start')
+		}
+
+		const connectionConfig = this.options.connection
+
+		const clientId = `frolyk-${Uuid()}`
+		const kafka = new Kafka({
+			clientId,
+			...connectionConfig
+		})
+
+		const consumerConfig = this.options.consumer || {}
+		
+		const consumer = this.consumer = kafka.consumer({
+			...consumerConfig,
+			groupId: `${this.group}`
+		})
+		const consumerEvents = new EventEmitter()
+		consumer.on(consumer.events.GROUP_JOIN, (...args) => consumerEvents.emit(consumer.events.GROUP_JOIN, ...args))
+
+
+		// TODO: add handling of consumer crashes, fetches, stopping, disconnects, batch stats collection, etc.
+
+	
+		// TODO: add group join handling
+
+		await consumer.connect()
+
+		const topicNames = this.sources.map(({ topicName }) => topicName)
+		for (let topic of topicNames) {
+			// TODO: add handling of offset resets
+			await consumer.subscribe({ topic })
+		}
 	}
 }
 
