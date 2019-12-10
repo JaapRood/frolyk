@@ -31,7 +31,7 @@
     "@types/node": "^12.6.8",
     "highland": "^2.13.5",
     "long": "^4.0.0",
-    "tap": "^14.4.3",
+    "tap": "^14.10.2",
     "typescript": "^3.5.3"
   },
   "devDependencies": {
