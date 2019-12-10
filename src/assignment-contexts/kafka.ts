@@ -8,7 +8,13 @@ export default async function createContext ({
     assignment: any,
     processors: any[],
     messagesStream: Highland.Stream<any>
-}) : Promise<any> {
+}) : Promise<{
+    topic: string,
+    partition: number,
+    stream: Highland.Stream<any>,
+    start () : Promise<any>,
+    stop () : Promise<any>
+}> {
     const processorContext = {
         /* istanbul ignore next */
         async caughtUp(offset) {},
@@ -42,7 +48,11 @@ export default async function createContext ({
     }, Promise.resolve(messagesStream))
 
     return {
+        topic: assignment.topic,
+        partition: assignment.partition,
+
         stream: processedMessages,
+        async start() {},
         async stop() {}
     }
 }

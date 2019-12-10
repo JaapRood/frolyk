@@ -19,6 +19,7 @@ class Task {
 	}
 
 	consumer?: any
+	processing?: any
 
 	constructor({ group, connection, consumer } : { group: string, connection?: any, consumer?: any }) {
 		this.events = new EventEmitter()
@@ -106,7 +107,7 @@ class Task {
 
 	
 		// TODO: add group join handling
-		const assignmentsStream = H(consumer.events.GROUP_JOIN, consumerEvents, ({ payload: { memberAssignment } }) => {
+		const sessionAssignmentContexts = H(consumer.events.GROUP_JOIN, consumerEvents, ({ payload: { memberAssignment } }) => {
 			const topicNames = Object.keys(memberAssignment)
 			const topicPartitions = topicNames.map((topic) => {
 				return { topic, partitions: memberAssignment[topic] }
@@ -117,6 +118,7 @@ class Task {
 				return partitions.map((partition) => ({ topic, partition }))
 			})
 		}).flatMap((assignments : [{ topic: string, partition: number }]) => {
+			// TODO: stop any currently running assignmentes before we start setting up new ones
 			return H(assignments)
 				.map(async ({ topic, partition }) => {
 					const source = this.sources.find(({ topicName }) => topicName === topic)
@@ -137,6 +139,23 @@ class Task {
 				})
 		})
 
+		const processingAssignments = sessionAssignmentContexts
+			.map(async (sessionContexts) => {
+				// start processing all session contexts
+				await Promise.all(sessionContexts.map((context) => context.start()))
+
+				return H(sessionContexts)
+					// .map((context) => context.stream)
+			})
+			.map((awaiting) => H(awaiting)) // only a single session of processing at once
+			.merge() // process all active assignments concurrently
+
+		const processingMessages = processingAssignments
+			.map((assignmentContext) => assignmentContext.stream)
+			.merge() // process all messages concurrently
+			.last() // keep track of the last processing result
+
+
 		await consumer.connect()
 
 		const topicNames = this.sources.map(({ topicName }) => topicName)
@@ -144,6 +163,8 @@ class Task {
 			// TODO: add handling of offset resets
 			await consumer.subscribe({ topic })
 		}
+
+		this.processing = processingMessages.toPromise(Promise)
 	}
 }
 
