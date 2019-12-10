@@ -1,7 +1,10 @@
 import EventEmitter from 'events'
 import Source from './source'
 import createLocalAssignmentContext, { AssignmentTestInterface } from './assignment-contexts/local'
+import createKafkaAssignmentContext from './assignment-contexts/kafka'
 import { Kafka, logLevel as LOG_LEVELS } from 'kafkajs'
+import H from 'highland'
+import _flatMap from 'lodash.flatmap'
 import Uuid from 'uuid/v4'
 
 export { AssignmentTestInterface }
@@ -103,6 +106,36 @@ class Task {
 
 	
 		// TODO: add group join handling
+		const assignmentsStream = H(consumer.events.GROUP_JOIN, consumerEvents, ({ payload: { memberAssignment } }) => {
+			const topicNames = Object.keys(memberAssignment)
+			const topicPartitions = topicNames.map((topic) => {
+				return { topic, partitions: memberAssignment[topic] }
+			})
+			consumer.pause(topicPartitions)
+	
+			return _flatMap(topicPartitions, ({ topic, partitions }) => {
+				return partitions.map((partition) => ({ topic, partition }))
+			})
+		}).flatMap((assignments : [{ topic: string, partition: number }]) => {
+			return H(assignments)
+				.map(async ({ topic, partition }) => {
+					const source = this.sources.find(({ topicName }) => topicName === topic)
+					
+					const assignment = { topic, partition, group: this.group }
+					const processors = source ? source.processors : []
+					// TODO: inject correct assignment stream
+					const messagesStream = H([])
+
+					return createKafkaAssignmentContext({ assignment, processors, messagesStream })
+				})
+				.map((awaiting) => H(awaiting))
+				.mergeWithLimit(4) // setup 4 assignments at once
+				.collect()
+				.errors((err, push) => {
+					// this.log(['task', 'assignments', 'setup', 'error'], err, 'Error in setting up assignments processing pipeline')
+					push(err) // rethrow, as we want the pipeline to fully fail now
+				})
+		})
 
 		await consumer.connect()
 
