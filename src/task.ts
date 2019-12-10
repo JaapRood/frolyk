@@ -14,8 +14,8 @@ class Task {
 	sources: Array<Source>
 	group: string
 	options: {
-		consumer?: any,
-		connection?: any
+		connection?: any,
+		consumer?: any
 	}
 
 	consumer?: any
