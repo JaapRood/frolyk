@@ -1,4 +1,4 @@
-import Source from './source'
+import Source from '../source'
 
 interface Assignment {
 	topic: string,
@@ -10,11 +10,4 @@ export interface AssignmentContext {
 	topic: string,
 	partition: number,
 	group: string
-}
-
-export default interface {
-	({ 
-		assignment: Assignment,
-		processors: any
-	}): AssignmentContext
 }
