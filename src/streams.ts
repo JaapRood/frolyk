@@ -67,12 +67,12 @@ class TaskStreams {
                     const more = stream.write({
                         topic: batch.topic,
                         partition: batch.partition,
-                        highWaterOffset: BigInt(batch.highWatermark),
-                        offset: BigInt(message.offset),
+                        highWaterOffset: batch.highWatermark,
+                        offset: message.offset,
 
                         ...message,
 
-                        timestamp: message.timestamp,
+                        timestamp: message.timestamp
                     })
 
                     checkpoint(message.offset)
