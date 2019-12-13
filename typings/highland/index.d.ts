@@ -28,5 +28,11 @@ declare module Highland {
      * // has completely been read or baz.md has been read
      */
         mergeWithLimit<U>(this: Stream<Stream<U>>, number) : Stream<U>;
+
+    /**
+     * Indicates whether a stream has ended.
+     */
+        ended?: boolean
     }
+
 }
