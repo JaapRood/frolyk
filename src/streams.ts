@@ -1,5 +1,18 @@
-import { Consumer, Message } from 'kafkajs/types'
+import { Consumer, IHeaders } from 'kafkajs/types'
 import H from 'highland'
+
+export interface Message {
+    topic: string
+    partition: number
+    
+    key?: Buffer | string | null
+    value: Buffer | string | null
+
+    headers?: IHeaders,
+    highWaterOffset: string
+    offset: string
+    timestamp?: string
+}
 
 class TaskStreams {
     consumer: Consumer
