@@ -107,11 +107,11 @@ Tap.test('TaskStreams', async (t) => {
         })
 
         await t.test('runs the consumer by injecting messages into streams', async (t) => {
-            const testMessages = Array(100)
+            const testMessages = Array(20)
                 .fill({})
                 .map(() => {
                     const value = secureRandom()
-                    return { key: `key-${value}`, value: `value-${value}` }
+                    return { key: `key-${value}`, value: `value-${value}`, partition: 0 }
                 })
             
             await produceMessages(testTopic, testMessages)
@@ -128,7 +128,7 @@ Tap.test('TaskStreams', async (t) => {
                 consumedMessages.map(({ key, value }) => {
                     return { key: key.toString(), value: value.toString() }
                 }),
-                testMessages
+                testMessages.map(({ key, value }) => ({ key, value }))
             , 'injects messages consumed into the corresponding stream')
         })
     })
