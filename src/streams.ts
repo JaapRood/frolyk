@@ -55,13 +55,13 @@ class TaskStreams {
             eachBatchAutoResolve: false, // do our own local checkpointing
             partitionsConsumedConcurrently: 4,
 
-            async eachBatch({ 
+            eachBatch: async ({ 
                 batch, 
                 resolveOffset: checkpoint, 
                 commitOffsetsIfNecessary: commitOffset, 
                 heartbeat, 
                 isRunning 
-            }) {
+            }) => {
                 const stream = this.stream({ topic: batch.topic, partition: batch.partition })
 
                 const observingStream = stream.fork()
