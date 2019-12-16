@@ -136,6 +136,7 @@ Tap.test('TaskStreams', async (t) => {
 
         await t.test('can consume message with a stream providing back-pressure', async (t) => {
             const pauseSpy = spy(consumer, 'pause')
+            const resumeSpy = spy(consumer, 'resume')
             
             const testMessages = Array(40)
                 .fill({})
@@ -158,7 +159,37 @@ Tap.test('TaskStreams', async (t) => {
                 .collect()
                 .toPromise(Promise)
 
-            t.ok(pauseSpy.called)
+            t.ok(pauseSpy.called, 'pauses consumption of topic to deal with back pressure')
+            t.ok(resumeSpy.called, 'resumes consumption of topic to deal with back pressure')
+        })
+
+        await t.test('prevents stale messages from being injected into consumption streams', async (t) => {
+            const testMessages = Array(40)
+                .fill({})
+                .map(() => {
+                    const value = secureRandom()
+                    return { key: `key-${value}`, value: `value-${value}`, partition: 0 }
+                })
+
+            await produceMessages(testTopic, testMessages)
+
+            await consumer.connect()
+            await consumer.subscribe({ topic: testTopic, fromBeginning: true })
+            await streams.start()
+
+            const stream = streams.stream({ topic: testTopic, partition: 0 })
+
+            const firstConsumedBatch = await H(stream)
+                .take(10)
+                .collect()
+                .toPromise(Promise)
+
+            consumer.seek({ topic: testTopic, partition: 0, offset: 15 })
+
+            const secondConsumed = await H(stream)
+                .take(10)
+                .collect()
+                .toPromise(Promise)
         })
     })
 })
