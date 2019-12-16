@@ -1,9 +1,11 @@
 import Tap from 'tap'
 import { Kafka } from 'kafkajs'
+import H from 'highland'
 import Config from './config'
 import createStreams from '../src/streams'
 import Uuid from 'uuid/v4'
 import Crypto from 'crypto'
+import { spy } from 'sinon'
 
 const secureRandom = (length = 10) =>
     `${Crypto.randomBytes(length).toString('hex')}-${process.pid}-${Uuid()}`
@@ -122,7 +124,7 @@ Tap.test('TaskStreams', async (t) => {
 
             const stream = streams.stream({ topic: testTopic, partition: 0 })
 
-            const consumedMessages = await stream.take(testMessages.length).collect().toPromise(Promise)
+            const consumedMessages = await H(stream).take(testMessages.length).collect().toPromise(Promise)
 
             t.deepEqual(
                 consumedMessages.map(({ key, value }) => {
@@ -130,6 +132,33 @@ Tap.test('TaskStreams', async (t) => {
                 }),
                 testMessages.map(({ key, value }) => ({ key, value }))
             , 'injects messages consumed into the corresponding stream')
+        })
+
+        await t.test('can consume message with a stream providing back-pressure', async (t) => {
+            const pauseSpy = spy(consumer, 'pause')
+            
+            const testMessages = Array(40)
+                .fill({})
+                .map(() => {
+                    const value = secureRandom()
+                    return { key: `key-${value}`, value: `value-${value}`, partition: 0 }
+                })
+
+            await produceMessages(testTopic, testMessages)
+
+            await consumer.connect()
+            await consumer.subscribe({ topic: testTopic, fromBeginning: true })
+            await streams.start()
+
+            const stream = streams.stream({ topic: testTopic, partition: 0 })
+
+            const consumedMessages = await H(stream)
+                .ratelimit(Math.ceil(testMessages.length / 10), 10)
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            t.ok(pauseSpy.called)
         })
     })
 })
