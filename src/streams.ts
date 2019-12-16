@@ -1,5 +1,6 @@
 import { Consumer, IHeaders } from 'kafkajs/types'
 import H from 'highland'
+import { Transform, TransformOptions } from 'stream'
 
 export interface Message {
     topic: string
@@ -12,6 +13,26 @@ export interface Message {
     highWaterOffset: string
     offset: string
     timestamp?: string
+}
+
+class TopicPartitionStream extends Transform {
+    topic: string
+    partition: number
+
+    constructor({ topic, partition } : { topic: string, partition: number }, streamOptions : TransformOptions = {}) {
+        super({
+            ...streamOptions,
+            objectMode: true,
+            highWaterMark: 8
+        })
+    
+        this.topic = topic
+        this.partition = partition
+    }
+
+    _transform(message : Message, encoding, callback) {
+        callback(null, message)
+    }
 }
 
 class TaskStreams {
