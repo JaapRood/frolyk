@@ -1,6 +1,7 @@
 import { Consumer, IHeaders } from 'kafkajs/types'
 import H from 'highland'
 import { Transform, TransformOptions } from 'stream'
+import { EventEmitter } from 'events'
 
 export interface Message {
     topic: string
@@ -23,7 +24,9 @@ class TopicPartitionStream extends Transform {
         super({
             ...streamOptions,
             objectMode: true,
-            highWaterMark: 8
+            highWaterMark: 8,
+            emitClose: true,
+            autoDestroy: true
         })
     
         this.topic = topic
@@ -36,31 +39,43 @@ class TopicPartitionStream extends Transform {
 }
 
 class TaskStreams {
-    consumer: Consumer
-    streams: Array<{
-        topic: string,
-        partition: number,
-        stream: Highland.Stream<Message>
-    }>
+    private consumer: Consumer
+    private streams: TopicPartitionStream[]
+    private consumerEvents: EventEmitter
 
     constructor(consumer : Consumer) {
         this.consumer = consumer
         this.streams = []
+
+        this.consumerEvents = new EventEmitter()
+        consumer.on(consumer.events.STOP, (...args) => {
+            this.consumerEvents.emit(consumer.events.STOP, ...args)
+        })
     }
 
-    stream({ topic, partition }: { topic: string, partition: number }) : Highland.Stream<Message> {
+    stream({ topic, partition }: { topic: string, partition: number }) : TopicPartitionStream {
+        const { consumer, consumerEvents } = this
         const stream = this.streams
-            .filter((topparStream) => topparStream.topic === topic && topparStream.partition === partition)    
-            .map(({ stream }) => stream)
-            .find(() => true) // pick the first matching stream
+            .find((topparStream) => topparStream.topic === topic && topparStream.partition === partition)    
 
         if (!stream) {
-            let newStream : Highland.Stream<Message> = H()
-            this.streams.push({
-                topic,
-                partition,
-                stream: newStream
-            })
+            let newStream : TopicPartitionStream = new TopicPartitionStream({ topic, partition})
+            
+            let onConsumerStop = () => newStream.end()
+            let onStreamClose = () => {
+                this.streams = this.streams.filter((stream) => stream !== newStream)
+            }
+            let onStreamFinish = () => cleanup()
+            let cleanup = () => {
+                consumerEvents.removeListener(consumer.events.STOP, onConsumerStop)
+                newStream.destroy() // no more writing to this stream
+            }
+
+            newStream.once('close', onStreamClose)
+            newStream.once('finish', onStreamFinish)
+            consumerEvents.once(consumer.events.STOP, onConsumerStop)
+            
+            this.streams.push(newStream)
 
             return newStream
         } else {
@@ -70,6 +85,36 @@ class TaskStreams {
 
     async start() {
         const { consumer } = this
+
+        const pauseConsumption = async ({ topic, partition } : { topic: string, partition: number }) => {
+            const stream = this.stream({ topic, partition })
+            // let isDrained = Symbol('drained')
+
+            let onDrain
+            let draining = new Promise((resolve, reject) => {
+                onDrain = () => resolve()
+                stream.once('drain', onDrain)
+            })
+
+            let onEnd
+            let ending = new Promise((resolve, reject) => {
+                onEnd = () => resolve()
+                stream.once('end', onEnd)
+            })
+
+            consumer.pause([{ topic, partitions: [partition] }])
+
+            try {
+                await Promise.race([draining, ending])
+
+                // whether we drained or stopped consuming this partition, we'll
+                // want it to be okay for consumer to fetch for this partition again.
+                consumer.resume([{ topic, partitions: [partition] }])
+            } finally {
+                stream.removeListener('drain', onDrain)
+                stream.removeListener('end', onEnd)
+            }
+        }
         
         await consumer.run({
             autoCommit: false, // let us be in full control of committing offsets
@@ -81,22 +126,13 @@ class TaskStreams {
                 resolveOffset: checkpoint, 
                 commitOffsetsIfNecessary: commitOffset, 
                 heartbeat, 
-                isRunning 
+                isRunning,
+                isStale
             }) => {
                 const stream = this.stream({ topic: batch.topic, partition: batch.partition })
-
-                const observingStream = stream.fork()
-
-                const streaming = observingStream.last().toPromise(Promise)
-
+                
                 for (let message of batch.messages) {
-                    if (!isRunning() || stream.ended) break
-
-                    let onDrain
-                    let draining = new Promise((resolve, reject) => {
-                        onDrain = () => resolve()
-                        stream.once('drain', onDrain)
-                    })
+                    if (!isRunning()) break
 
                     const more = stream.write({
                         topic: batch.topic,
@@ -110,20 +146,16 @@ class TaskStreams {
                     })
 
                     checkpoint(message.offset)
-                    await heartbeat()
-
-                    if (!more && isRunning() && !stream.ended) {
-                        await Promise.race([
-                            draining,
-                            streaming
-                        ])
+                    
+                    if (!more && isRunning()) {
+                        pauseConsumption({ topic: batch.topic, partition: batch.partition })
+                        break
                     }
-
-                    stream.removeListener('drain', onDrain)
+                    
+                    await heartbeat()
                 }
 
                 await heartbeat()
-                observingStream.destroy()
             }
         })
     }
