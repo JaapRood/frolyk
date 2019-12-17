@@ -197,5 +197,39 @@ Tap.test('TaskStreams', async (t) => {
             t.ok(consumedMessages.length < testMessages.length, 'stops injecting messages into the stream once stopped')
             t.ok(stream.destroyed, 'destroys streams when consumer stops')
         })
+
+        await t.test('will stop injecting messages into stream when stream ends while messages still being consumed', async (t) => {
+            const testMessages = Array(100)
+                .fill({})
+                .map(() => {
+                    const value = secureRandom()
+                    return { key: `key-${value}`, value: `value-${value}`, partition: 0 }
+                })
+
+            await produceMessages(testTopic, testMessages)
+
+            await consumer.connect()
+            await consumer.subscribe({ topic: testTopic, fromBeginning: true })
+            await streams.start()
+
+            var messageCount = 0
+
+            const stream = streams.stream({ topic: testTopic, partition: 0 })
+
+            const consumedMessages = await H(stream)
+                .ratelimit(1, 100)
+                .tap(() => {
+                    messageCount++
+                    if (messageCount === 3) {
+                        stream.end()
+                    }
+                })
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            t.ok(consumedMessages.length < testMessages.length, 'stops injecting messages into the stream once stopped')
+            t.ok(stream.destroyed, 'stream is destroyed after it ends')
+        })
     })
 })
