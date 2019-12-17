@@ -1,5 +1,5 @@
 import Tap from 'tap'
-import { Kafka } from 'kafkajs'
+import { Kafka, logLevel } from 'kafkajs'
 import H from 'highland'
 import Config from './config'
 import createStreams from '../src/streams'
@@ -10,12 +10,16 @@ import { spy } from 'sinon'
 const secureRandom = (length = 10) =>
     `${Crypto.randomBytes(length).toString('hex')}-${process.pid}-${Uuid()}`
 
-const createConsumer = (options = {}) => {
-    const kafka = new Kafka({ clientId: 'frolyk-tests', brokers: Config.kafka.brokers })
+const createConsumer = (options : { logLevel?: logLevel } = {
+    logLevel: logLevel.NOTHING
+}) => {
+    const { logLevel, ...consumerOptions } = options
+    const kafka = new Kafka({ clientId: 'frolyk-tests', brokers: Config.kafka.brokers, logLevel })
     
+
     return kafka.consumer({
         groupId: `group-${secureRandom()}`,
-        ...options,
+        ...consumerOptions,
         maxWaitTimeInMs: 100
     })
 }
