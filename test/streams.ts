@@ -2,7 +2,7 @@ import Tap from 'tap'
 import { Kafka, logLevel } from 'kafkajs'
 import H from 'highland'
 import Config from './config'
-import createStreams from '../src/streams'
+import createStreams, { Message } from '../src/streams'
 import Uuid from 'uuid/v4'
 import Crypto from 'crypto'
 import { spy } from 'sinon'
@@ -234,6 +234,50 @@ Tap.test('TaskStreams', async (t) => {
 
             t.ok(consumedMessages.length < testMessages.length, 'stops injecting messages into the stream once stopped')
             t.ok(stream.destroyed, 'stream is destroyed after it ends')
+        })
+
+        await t.test('will keep fetching and injecting messages for fast topics in the presence of slower topics', async (t) => {
+            const testMessages = Array(20)
+                .fill({})
+                .map((obj, n) => {
+                    const value = secureRandom()
+                    // alternate between 2 partitions
+                    return { key: `key-${value}`, value: `value-${value}`, partition: n % 2 }
+                })
+
+            await produceMessages(testTopic, testMessages)
+
+            await consumer.connect()
+            await consumer.subscribe({ topic: testTopic, fromBeginning: true })
+            await streams.start()
+
+            var messageCount = 0
+
+            const stream = streams.stream({ topic: testTopic, partition: 0 })
+
+            const fastStream = streams.stream({ topic: testTopic, partition: 0 });
+            const slowStream = streams.stream({ topic: testTopic, partition: 1 });
+
+
+            const consumedMessages = await H([
+                    { stream: fastStream, timeout: 1 },
+                    { stream: slowStream, timeout: 50 }
+                ])
+                .map(({ stream, timeout }) => {
+                    return H(stream).ratelimit(1, timeout)
+                })
+                .merge()
+                .take(testMessages.length)
+                .drop(2) // first two messages will be concurrent, so undefined order
+                .collect()
+                .toPromise(Promise)
+
+            const consumedPartitions = consumedMessages.map((m : Message) => m.partition)
+
+            t.deepEqual(consumedPartitions, [
+                ...Array((testMessages.length - 2) / 2).fill(0),
+                ...Array((testMessages.length - 2) / 2).fill(1)
+            ], 'fetches and inject messages for faster partitions as slower partitions experience back-pressure');
         })
     })
 })
