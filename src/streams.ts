@@ -132,7 +132,7 @@ class TaskStreams {
                 const stream = this.stream({ topic: batch.topic, partition: batch.partition })
                 
                 for (let message of batch.messages) {
-                    if (!isRunning()) break
+                    if (!isRunning() || stream.writableEnded) break
 
                     const more = stream.write({
                         topic: batch.topic,
