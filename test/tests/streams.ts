@@ -1,10 +1,6 @@
 import Tap from 'tap'
-import { Kafka, logLevel } from 'kafkajs'
 import H from 'highland'
-import Config from '../config'
 import createStreams, { Message } from '../../src/streams'
-import Uuid from 'uuid/v4'
-import Crypto from 'crypto'
 import { spy } from 'sinon'
 
 import {
