@@ -16,10 +16,15 @@ export interface Message {
     timestamp?: string
 }
 
-class TopicPartitionStream extends Transform {
+export interface TopicPartitionStream extends Transform {
     topic: string
     partition: number
+}
 
+class TPStream extends Transform implements TopicPartitionStream {
+    topic: string
+    partition: number
+    
     constructor({ topic, partition } : { topic: string, partition: number }, streamOptions : TransformOptions = {}) {
         super({
             ...streamOptions,
@@ -59,7 +64,7 @@ class TaskStreams {
             .find((topparStream) => topparStream.topic === topic && topparStream.partition === partition)    
 
         if (!stream) {
-            let newStream : TopicPartitionStream = new TopicPartitionStream({ topic, partition})
+            let newStream : TopicPartitionStream = new TPStream({ topic, partition})
             
             let onConsumerStop = () => newStream.end()
             let onStreamClose = () => {
