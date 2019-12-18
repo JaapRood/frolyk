@@ -1,5 +1,5 @@
 import Tap from 'tap'
-import createLocalAssignmentContext, { AssignmentTestInterface } from '../src/assignment-contexts/local'
+import createLocalAssignmentContext, { AssignmentTestInterface } from '../../src/assignment-contexts/local'
 import { spy } from 'sinon'
 
 

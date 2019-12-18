@@ -1,5 +1,5 @@
 import Tap from 'tap'
-import createTask from '../src/task'
+import createTask from '../../src/task'
 import { spy } from 'sinon'
 
 Tap.test('Task', async (t) => {
@@ -88,6 +88,12 @@ Tap.test('Task', async (t) => {
 
 			t.ok(messageProcessor.calledOnce)
 			t.ok(messageProcessor.calledWith(injectedMessage))
+		})
+	})
+
+	t.test('Task.start', async (t) => {
+		t.beforeEach(() => {
+			
 		})
 	})
 })

@@ -11,8 +11,8 @@
     "build": "tsc",
     "prepublish": "npm run build",
     "watch": "tsc -w",
-    "test": "tap --100",
-    "test-debug": "tap -j 1 --no-timeout --no-coverage --no-coverage-report --node-arg=\"--inspect-brk\""
+    "test": "tap --100 --files ./test/tests",
+    "test-debug": "tap --files ./test/tests -j 1 --no-timeout --no-coverage --no-coverage-report --node-arg=\"--inspect-brk\""
   },
   "keywords": [
     "kafka",
