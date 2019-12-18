@@ -236,6 +236,51 @@ Tap.test('TaskStreams', async (t) => {
             t.ok(stream.destroyed, 'stream is destroyed after it ends')
         })
 
+        await t.test('will resume injecting messages when new stream was created after previous one destroyed', async (t) => {
+            const testMessages = Array(100)
+                .fill({})
+                .map(() => {
+                    const value = secureRandom()
+                    return { key: `key-${value}`, value: `value-${value}`, partition: 0 }
+                })
+
+            await produceMessages(testTopic, testMessages)
+
+            await consumer.connect()
+            await consumer.subscribe({ topic: testTopic, fromBeginning: true })
+            await streams.start()
+
+            var messageCount = 0
+
+            const firstStream = streams.stream({ topic: testTopic, partition: 0 })
+
+            const firstOffsets = await H(firstStream)
+                .ratelimit(1, 20)
+                .tap(() => {
+                    messageCount++
+                    if (messageCount === 3) {
+                        firstStream.end()
+                    }
+                })
+                .take(testMessages.length)
+                .map((m : Message) => m.offset)
+                .collect()
+                .toPromise(Promise)
+
+            const secondStream = streams.stream({ topic: testTopic, partition: 0 })
+
+            const secondOffsets = await H(secondStream)
+                .take(testMessages.length - firstOffsets.length)
+                .map((m : Message) => m.offset)
+                .collect()
+                .toPromise(Promise)
+
+            t.equal(
+                parseInt(firstOffsets[firstOffsets.length - 1]),
+                parseInt(secondOffsets[0]) - 1
+            , 'continues injecting messages for second stream where first stream stopped')
+        })
+
         await t.test('will keep fetching and injecting messages for fast topics in the presence of slower topics', async (t) => {
             const testMessages = Array(20)
                 .fill({})
@@ -277,7 +322,7 @@ Tap.test('TaskStreams', async (t) => {
             t.deepEqual(consumedPartitions, [
                 ...Array((testMessages.length - 2) / 2).fill(0),
                 ...Array((testMessages.length - 2) / 2).fill(1)
-            ], 'fetches and inject messages for faster partitions as slower partitions experience back-pressure');
+            ], 'fetches and inject messages for faster partitions as slower partitions experience back-pressure')
         })
     })
 })
