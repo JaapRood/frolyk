@@ -1,20 +1,23 @@
 import H from 'highland'
+import { TopicPartitionStream, Message } from '../streams'
 
 export default async function createContext ({
     assignment,
     processors,
-    messagesStream
+    stream: rawStream
 }: {
     assignment: any,
     processors: any[],
-    messagesStream: Highland.Stream<any>
+    stream: TopicPartitionStream
 }) : Promise<{
     topic: string,
     partition: number,
-    stream: Highland.Stream<any>,
+    stream: Highland.Stream<Message>,
     start () : Promise<any>,
     stop () : Promise<any>
 }> {
+    const controlledStream = H(rawStream)
+
     const processorContext = {
         /* istanbul ignore next */
         async caughtUp(offset) {},
@@ -38,20 +41,20 @@ export default async function createContext ({
         group: assignment.group
     }
 
-    const processedMessages = await processors.reduce(async (s, setupProcessor) => {
+    const processedStream = await processors.reduce(async (s, setupProcessor) => {
         const stream = await s
 
         const messageProcessor = await setupProcessor(processorContext)
 
         return stream.map(async (message) => await messageProcessor(message))
             .flatMap((awaitingProcessing) => H(awaitingProcessing))
-    }, Promise.resolve(messagesStream))
+    }, Promise.resolve(controlledStream))
 
     return {
         topic: assignment.topic,
         partition: assignment.partition,
 
-        stream: processedMessages,
+        stream: processedStream,
         async start() {},
         async stop() {}
     }

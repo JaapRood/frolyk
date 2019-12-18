@@ -3,6 +3,7 @@ import Source from './source'
 import createLocalAssignmentContext, { AssignmentTestInterface } from './assignment-contexts/local'
 import createKafkaAssignmentContext from './assignment-contexts/kafka'
 import { Kafka, logLevel as LOG_LEVELS } from 'kafkajs'
+import createStreams from './streams'
 import H from 'highland'
 import _flatMap from 'lodash.flatmap'
 import Uuid from 'uuid/v4'
@@ -99,14 +100,13 @@ class Task {
 			...consumerConfig,
 			groupId: `${this.group}`
 		})
+		const streams = createStreams(consumer)
 		const consumerEvents = new EventEmitter()
 		consumer.on(consumer.events.GROUP_JOIN, (...args) => consumerEvents.emit(consumer.events.GROUP_JOIN, ...args))
 
 
 		// TODO: add handling of consumer crashes, fetches, stopping, disconnects, batch stats collection, etc.
-
 	
-		// TODO: add group join handling
 		const sessionAssignmentContexts = H(consumer.events.GROUP_JOIN, consumerEvents, ({ payload: { memberAssignment } }) => {
 			const topicNames = Object.keys(memberAssignment)
 			const topicPartitions = topicNames.map((topic) => {
@@ -125,10 +125,9 @@ class Task {
 					
 					const assignment = { topic, partition, group: this.group }
 					const processors = source ? source.processors : []
-					// TODO: inject correct assignment stream
-					const messagesStream = H([])
+					const stream = streams.stream({ topic, partition })
 
-					return createKafkaAssignmentContext({ assignment, processors, messagesStream })
+					return createKafkaAssignmentContext({ assignment, processors, stream })
 				})
 				.map((awaiting) => H(awaiting))
 				.mergeWithLimit(4) // setup 4 assignments at once
