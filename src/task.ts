@@ -167,6 +167,14 @@ class Task {
 
 		this.processing = processingMessages.toPromise(Promise)
 	}
+
+	async stop() {
+		const { consumer, events } = this
+
+		// TODO: add teardown of processing pipeline
+		await consumer.disconnect()
+		events.emit('stop')
+	}
 }
 
 export default function createTask(config : { group: string }) : Task {
