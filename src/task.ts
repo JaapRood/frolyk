@@ -163,6 +163,8 @@ class Task {
 			await consumer.subscribe({ topic })
 		}
 
+		streams.start()
+
 		this.processing = processingMessages.toPromise(Promise)
 	}
 }
