@@ -7,63 +7,13 @@ import Uuid from 'uuid/v4'
 import Crypto from 'crypto'
 import { spy } from 'sinon'
 
-const secureRandom = (length = 10) =>
-    `${Crypto.randomBytes(length).toString('hex')}-${process.pid}-${Uuid()}`
-
-const createConsumer = (options : { logLevel?: logLevel } = {
-    logLevel: logLevel.NOTHING
-}) => {
-    const { logLevel, ...consumerOptions } = options
-    const kafka = new Kafka({ clientId: 'frolyk-tests', brokers: Config.kafka.brokers, logLevel })
-    
-
-    return kafka.consumer({
-        groupId: `group-${secureRandom()}`,
-        ...consumerOptions,
-        maxWaitTimeInMs: 100
-    })
-}
-
-const createTopic = async ({ topic, partitions = 1, config = [] }) => {
-    const kafka = new Kafka({ clientId: 'frolyk-tests', brokers: Config.kafka.brokers })
-    const admin = kafka.admin()
-
-    try {
-        await admin.connect()
-        await admin.createTopics({
-            waitForLeaders: true,
-            topics: [{ topic, numPartitions: partitions, configEntries: config }],
-        })
-    } finally {
-        admin && (await admin.disconnect())
-    }
-}
-
-const deleteTopic = async (topic) => {
-    const kafka = new Kafka({ clientId: 'frolyk-tests', brokers: Config.kafka.brokers })
-    const admin = kafka.admin()
-
-    try {
-        await admin.connect()
-        await admin.deleteTopics({
-            topics: [topic]
-        })
-    } finally {
-        admin && (await admin.disconnect())
-    }
-}
-
-const produceMessages = async (topic, messages) => {
-    const kafka = new Kafka({ clientId: 'frolyk-tests', brokers: Config.kafka.brokers })
-    const producer = kafka.producer()
-
-    try {
-        await producer.connect()
-        await producer.send({ acks: 1, topic, messages })
-    } finally {
-        producer && (await producer.disconnect())
-    }
-}
+import {
+    secureRandom,
+    createConsumer,
+    createTopic,
+    deleteTopic,
+    produceMessages
+} from '../helpers'
 
 Tap.test('TaskStreams', async (t) => {
     t.test('can construct streams with a KafkaJS Consumer', async (t) => {
