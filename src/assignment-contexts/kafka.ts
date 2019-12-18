@@ -1,14 +1,17 @@
 import H from 'highland'
 import { TopicPartitionStream, Message } from '../streams'
+import { Consumer } from 'kafkajs'
 
 export default async function createContext ({
     assignment,
     processors,
-    stream: rawStream
+    stream: rawStream,
+    consumer
 }: {
     assignment: any,
     processors: any[],
-    stream: TopicPartitionStream
+    stream: TopicPartitionStream,
+    consumer: Consumer
 }) : Promise<{
     topic: string,
     partition: number,
@@ -55,7 +58,10 @@ export default async function createContext ({
         partition: assignment.partition,
 
         stream: processedStream,
+        
+        /* istanbul ignore next */
         async start() {},
+        /* istanbul ignore next */
         async stop() {}
     }
 }

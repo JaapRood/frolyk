@@ -127,7 +127,7 @@ class Task {
 					const processors = source ? source.processors : []
 					const stream = streams.stream({ topic, partition })
 
-					return createKafkaAssignmentContext({ assignment, processors, stream })
+					return createKafkaAssignmentContext({ assignment, consumer, processors, stream })
 				})
 				.map((awaiting) => H(awaiting))
 				.mergeWithLimit(4) // setup 4 assignments at once
