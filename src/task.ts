@@ -177,6 +177,6 @@ class Task {
 	}
 }
 
-export default function createTask(config : { group: string }) : Task {
+export default function createTask(config) : Task {
 	return new Task(config)
 }
