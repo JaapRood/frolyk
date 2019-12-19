@@ -1,6 +1,15 @@
 import Tap from 'tap'
 import createTask from '../../src/task'
-import { spy } from 'sinon'
+import H from 'highland'
+import { spy, match } from 'sinon'
+
+import {
+	kafkaConfig,
+	secureRandom,
+	createTopic,
+	deleteTopic,
+	produceMessages
+} from '../helpers'
 
 Tap.test('Task', async (t) => {
 	t.test('can be constructed', async (t) => {
@@ -92,8 +101,49 @@ Tap.test('Task', async (t) => {
 	})
 
 	t.test('Task.start', async (t) => {
-		t.beforeEach(() => {
-			
+		let testTopic, testGroup, task
+		t.beforeEach(async () => {
+			testTopic = `topic-${secureRandom()}`
+			testGroup = `group-${secureRandom()}`
+			task = createTask({ group: testGroup, connection: kafkaConfig() })
+			await createTopic({ topic: testTopic, partitions: 2 })
+		})
+
+		t.afterEach(async () => {
+			if (task) await task.stop()
+			if (testTopic) await deleteTopic(testTopic)
+		})
+
+		await t.test('connects a Consumer, joins group and sets up processing pipeline for each assignment', async (t) => {
+			const testMessages = Array(100).fill({}).map(() => ({
+				value: `value-${secureRandom()}`,
+				key: `value-${secureRandom()}`,
+				partition: 0
+			}))
+
+			await produceMessages(testTopic, testMessages)
+
+			const testSource = task.source(testTopic)
+	
+			const processingMessages = H()
+			const messageProcessor = spy((message) => processingMessages.write(message))
+			const processorSetup = spy((assignment) => {
+				t.equal(assignment.topic, testTopic, 'processor setup is called for topic subscribed to')
+				t.ok(assignment.partition === 0 || assignment.partition === 1 , 'processor setup is called for partition subscribed to')
+				return messageProcessor
+			})
+
+			task.processor(testSource, processorSetup)
+
+			await task.start()
+
+			const processedMessages = await processingMessages
+				.tap((message) => console.log('processed message', message))
+				.take(testMessages.length).collect().toPromise(Promise)
+
+			// await task.stop()
+
+			t.ok(processorSetup.calledTwice, 'processor setup is called for each received assignment')
 		})
 	})
 })

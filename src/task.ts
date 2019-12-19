@@ -3,7 +3,7 @@ import Source from './source'
 import createLocalAssignmentContext, { AssignmentTestInterface } from './assignment-contexts/local'
 import createKafkaAssignmentContext from './assignment-contexts/kafka'
 import { Kafka, logLevel as LOG_LEVELS } from 'kafkajs'
-import createStreams from './streams'
+import createStreams, { Message } from './streams'
 import H from 'highland'
 import _flatMap from 'lodash.flatmap'
 import Uuid from 'uuid/v4'
@@ -20,7 +20,7 @@ class Task {
 	}
 
 	consumer?: any
-	processing?: any
+	processing?: Promise<any>
 
 	constructor({ group, connection, consumer } : { group: string, connection?: any, consumer?: any }) {
 		this.events = new EventEmitter()
@@ -138,22 +138,22 @@ class Task {
 				})
 		})
 
-		const processingAssignments = sessionAssignmentContexts
+		const sessionPipelines = sessionAssignmentContexts
 			.map(async (sessionContexts) => {
-				// start processing all session contexts
+				// start processing for all assignments concurrently
 				await Promise.all(sessionContexts.map((context) => context.start()))
+				
+				return sessionContexts
+			}).map((awaiting) => H(awaiting)).merge()
+			// merge into one message processing pipeline for the entire session
+			.map((sessionContexts) => H(sessionContexts)
+				.map((context) => context.stream)
+				.merge() // process all messages within a session at the same time
+			)
 
-				return H(sessionContexts)
-					// .map((context) => context.stream)
-			})
-			.map((awaiting) => H(awaiting)) // only a single session of processing at once
-			.merge() // process all active assignments concurrently
 
-		const processingMessages = processingAssignments
-			.map((assignmentContext) => assignmentContext.stream)
-			.merge() // process all messages concurrently
-			.last() // keep track of the last processing result
-
+		const processingSessions = sessionPipelines.flatMap((sessionResults) => sessionResults) // process only a single session at a time
+	
 
 		await consumer.connect()
 
@@ -165,7 +165,7 @@ class Task {
 
 		streams.start()
 
-		this.processing = processingMessages.toPromise(Promise)
+		this.processing = processingSessions.last().toPromise(Promise)
 	}
 
 	async stop() {

@@ -33,6 +33,9 @@ declare module Highland {
      * Indicates whether a stream has ended.
      */
         ended?: boolean
+
+        toPromise(ctr : typeof Promise) : Promise<R>
     }
+
 
 }
