@@ -1,5 +1,5 @@
 import Crypto from 'crypto'
-import { Kafka, logLevel } from 'kafkajs'
+import { Kafka, logLevel as LOG_LEVEL } from 'kafkajs'
 import Uuid from 'uuid/v4'
 import Config from './config'
 
@@ -7,11 +7,21 @@ export function secureRandom (length = 10) {
     return `${Crypto.randomBytes(length).toString('hex')}-${process.pid}-${Uuid()}`
 }
 
-export function createConsumer (options: { logLevel?: logLevel } = {
-    logLevel: logLevel.NOTHING
+export function kafkaConfig(options: { logLevel?: LOG_LEVEL } = {
+    logLevel: LOG_LEVEL.NOTHING
+}) {
+    return { 
+        clientId: 'frolyk-tests', 
+        brokers: Config.kafka.brokers, 
+        logLevel: options.logLevel
+    }
+}
+
+export function createConsumer (options: { logLevel?: LOG_LEVEL } = {
+    logLevel: LOG_LEVEL.NOTHING
 }) {
     const { logLevel, ...consumerOptions } = options
-    const kafka = new Kafka({ clientId: 'frolyk-tests', brokers: Config.kafka.brokers, logLevel })
+    const kafka = new Kafka(kafkaConfig({ logLevel }))
 
 
     return kafka.consumer({
