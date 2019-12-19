@@ -8,7 +8,11 @@ export default async function createContext ({
     stream: rawStream,
     consumer
 }: {
-    assignment: any,
+    assignment: {
+        topic: string,
+        partition: number,
+        group: string
+    },
     processors: any[],
     stream: TopicPartitionStream,
     consumer: Consumer
