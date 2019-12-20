@@ -17,15 +17,16 @@ export function kafkaConfig(options: { logLevel?: LOG_LEVEL } = {
     }
 }
 
-export function createConsumer (options: { logLevel?: LOG_LEVEL } = {
-    logLevel: LOG_LEVEL.NOTHING
+export function createConsumer (options: { logLevel?: LOG_LEVEL, groupId?: string | null } = {
+    logLevel: LOG_LEVEL.NOTHING,
+    groupId: null
 }) {
-    const { logLevel, ...consumerOptions } = options
+    const { logLevel, groupId, ...consumerOptions } = options
     const kafka = new Kafka(kafkaConfig({ logLevel }))
 
 
     return kafka.consumer({
-        groupId: `group-${secureRandom()}`,
+        groupId: groupId || `group-${secureRandom()}`,
         ...consumerOptions,
         maxWaitTimeInMs: 100
     })
