@@ -112,7 +112,7 @@ class Task {
 			const topicPartitions = topicNames.map((topic) => {
 				return { topic, partitions: memberAssignment[topic] }
 			})
-			consumer.pause(topicPartitions)
+			// consumer.pause(topicPartitions)
 	
 			return _flatMap(topicPartitions, ({ topic, partitions }) => {
 				return partitions.map((partition) => ({ topic, partition }))
@@ -144,7 +144,8 @@ class Task {
 				await Promise.all(sessionContexts.map((context) => context.start()))
 				
 				return sessionContexts
-			}).map((awaiting) => H(awaiting)).merge()
+			})
+			.map((awaiting) => H(awaiting)).merge()
 			// merge into one message processing pipeline for the entire session
 			.map((sessionContexts) => H(sessionContexts)
 				.map((context) => context.stream)
