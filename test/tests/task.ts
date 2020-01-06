@@ -121,8 +121,6 @@ Tap.test('Task', async (t) => {
 				partition: 0
 			}))
 
-			await produceMessages(testTopic, testMessages)
-
 			const testSource = task.source(testTopic)
 	
 			const processingMessages = H()
@@ -137,11 +135,13 @@ Tap.test('Task', async (t) => {
 
 			await task.start()
 
+			await new Promise((r) => setTimeout(r, 1500))
+			await produceMessages(testTopic, testMessages)
+
 			const processedMessages = await processingMessages
-				.tap((message) => console.log('processed message', message))
 				.take(testMessages.length).collect().toPromise(Promise)
 
-			// await task.stop()
+			await task.stop()
 
 			t.ok(processorSetup.calledTwice, 'processor setup is called for each received assignment')
 		})
