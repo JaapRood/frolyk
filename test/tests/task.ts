@@ -157,5 +157,28 @@ Tap.test('Task', async (t) => {
 				await task.start()
 			}, /kafka connection/, 'throws missing connection options error when starting task created without them')
 		})
+
+		await t.test('destroys the processing pipeline when any of the assignment processor setups reject', async (t) => {
+			const testSource = task.source(testTopic)
+
+			const processingMessages = H()
+			const messageProcessor = spy((message) => {
+				processingMessages.write(message)
+				return message
+			})
+			const processorSetup = spy((assignment) => {
+				throw new Error('any-processor-setup-error')
+				return messageProcessor
+			})
+
+			task.processor(testSource, processorSetup)
+
+
+			// it should start up fine
+			await task.start()
+
+			// but the processing should fail
+			await t.rejects(task.processing, 'any-processor-setup-error', 'forwards any errors thrown in assignment processors to the end of the pipeline')
+		})
 	})
 })
