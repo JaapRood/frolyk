@@ -139,6 +139,7 @@ Tap.test('Task', async (t) => {
 
 			await task.start()
 
+			// TODO: replace timeout by consuming log from the start
 			await new Promise((r) => setTimeout(r, 1500))
 			await produceMessages(testTopic, testMessages)
 
@@ -146,6 +147,7 @@ Tap.test('Task', async (t) => {
 				.take(testMessages.length).collect().toPromise(Promise)
 
 			t.ok(processorSetup.calledTwice, 'processor setup is called for each received assignment')
+			t.ok(task.processing, 'exposes a Promise that represents the end part of the processing pipeline')
 		})
 	})
 })
