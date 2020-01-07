@@ -88,7 +88,7 @@ Tap.test('TaskStreams', async (t) => {
             const pauseSpy = spy(consumer, 'pause')
             const resumeSpy = spy(consumer, 'resume')
             
-            const testMessages = Array(40)
+            const testMessages = Array(80)
                 .fill({})
                 .map(() => {
                     const value = secureRandom()
@@ -111,7 +111,7 @@ Tap.test('TaskStreams', async (t) => {
 
             t.ok(pauseSpy.called, 'pauses consumption of topic to deal with back pressure')
             t.ok(resumeSpy.called, 'resumes consumption of topic to deal with back pressure')
-
+            t.ok(resumeSpy.calledOnce, 'resumes consumption only after in-memory batch has been consumed')
         })
 
         await t.test('will stop injecting messages into streams when consumer stopped running and destroy the stream', async (t) => {

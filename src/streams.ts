@@ -111,10 +111,6 @@ class TaskStreams {
 
             try {
                 await Promise.race([draining, ending])
-
-                // whether we drained or stopped consuming this partition, we'll
-                // want it to be okay for consumer to fetch for this partition again.
-                consumer.resume([{ topic, partitions: [partition] }])
             } finally {
                 stream.removeListener('drain', onDrain)
                 stream.removeListener('end', onEnd)
@@ -153,14 +149,20 @@ class TaskStreams {
                     checkpoint(message.offset)
                     
                     if (!more && isRunning()) {
-                        pauseConsumption({ topic: batch.topic, partition: batch.partition })
-                        break
+                        await pauseConsumption({ topic: batch.topic, partition: batch.partition })
+                        if (!isRunning() || stream.writableEnded) break
                     }
                     
                     await heartbeat()
                 }
 
                 await heartbeat()
+
+                // whether we drained or stopped consuming this partition, we'll
+                // want it to be okay for consumer to fetch for this partition again.
+                if (isRunning()) {
+                    consumer.resume([{ topic: batch.topic, partitions: [batch.partition] }])
+                }
             }
         })
     }
