@@ -124,7 +124,10 @@ Tap.test('Task', async (t) => {
 			const testSource = task.source(testTopic)
 	
 			const processingMessages = H()
-			const messageProcessor = spy((message) => processingMessages.write(message))
+			const messageProcessor = spy((message) => {
+				processingMessages.write(message)
+				return message
+			})
 			const processorSetup = spy((assignment) => {
 				t.equal(assignment.topic, testTopic, 'processor setup is called for topic subscribed to')
 				t.ok(assignment.partition === 0 || assignment.partition === 1 , 'processor setup is called for partition subscribed to')
@@ -140,8 +143,6 @@ Tap.test('Task', async (t) => {
 
 			const processedMessages = await processingMessages
 				.take(testMessages.length).collect().toPromise(Promise)
-
-			await task.stop()
 
 			t.ok(processorSetup.calledTwice, 'processor setup is called for each received assignment')
 		})
