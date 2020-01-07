@@ -120,11 +120,12 @@ class Task {
 		}).flatMap((assignments : [{ topic: string, partition: number }]) => {
 			// TODO: stop any currently running assignmentes before we start setting up new ones
 			return H(assignments)
+				.filter(({ topic, partition }) => !!this.sources.find(({ topicName }) => topicName === topic))
 				.map(async ({ topic, partition }) => {
 					const source = this.sources.find(({ topicName }) => topicName === topic)
-					
+
 					const assignment = { topic, partition, group: this.group }
-					const processors = source ? source.processors : []
+					const { processors } = source
 					const stream = streams.stream({ topic, partition })
 
 					return createKafkaAssignmentContext({ assignment, consumer, processors, stream })
