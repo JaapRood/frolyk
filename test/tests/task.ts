@@ -149,5 +149,13 @@ Tap.test('Task', async (t) => {
 			t.ok(processorSetup.calledTwice, 'processor setup is called for each received assignment')
 			t.ok(task.processing, 'exposes a Promise that represents the end part of the processing pipeline')
 		})
+
+		await t.test('requires task to have been created with kafka connection information', async (t) => {
+			task = createTask({ group: testGroup })
+
+			await t.rejects(async () => {
+				await task.start()
+			}, /kafka connection/, 'throws missing connection options error when starting task created without them')
+		})
 	})
 })
