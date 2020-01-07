@@ -172,8 +172,10 @@ class Task {
 	async stop() {
 		const { consumer, events } = this
 
+		if (consumer) {
+			await consumer.disconnect()
+		}
 		// TODO: add teardown of processing pipeline
-		await consumer.disconnect()
 		events.emit('stop')
 	}
 }
