@@ -2,6 +2,7 @@ import Tap from 'tap'
 import createTask from '../../src/task'
 import H from 'highland'
 import { spy, match } from 'sinon'
+import { logLevel as LOG_LEVEL } from 'kafkajs'
 
 import {
 	kafkaConfig,
@@ -105,7 +106,7 @@ Tap.test('Task', async (t) => {
 		t.beforeEach(async () => {
 			testTopic = `topic-${secureRandom()}`
 			testGroup = `group-${secureRandom()}`
-			task = createTask({ group: testGroup, connection: kafkaConfig() })
+			task = createTask({ group: testGroup, connection: {...kafkaConfig(), logLevel: LOG_LEVEL.ERROR }})
 			await createTopic({ topic: testTopic, partitions: 2 })
 		})
 

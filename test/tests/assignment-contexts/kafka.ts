@@ -2,6 +2,7 @@ import Tap from 'tap'
 import H from 'highland'
 import createStreams, { Message } from '../../../src/streams'
 import createKafkaAssignmentContext from '../../../src//assignment-contexts/kafka'
+import { logLevel as LOG_LEVEL } from 'kafkajs'
 import { spy } from 'sinon'
 
 import {
@@ -37,7 +38,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                 partition: 0,
                 group: `group-${secureRandom()}`
             }
-            consumer = createConsumer({ groupId: testAssignment.group })
+            consumer = createConsumer({ groupId: testAssignment.group, logLevel: LOG_LEVEL.ERROR })
             streams = createStreams(consumer)
             stream = streams.stream({ topic: testAssignment.topic, partition: 0 })
             await consumer.connect()
