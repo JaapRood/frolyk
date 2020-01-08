@@ -154,7 +154,7 @@ class Task {
 	}
 
 	private async reassign(newAssignments) {
-		if (this.reassigning) await this.reassigning // wait for previous reassigment to have finished first
+		await this.reassigning // wait for previous reassigment to have finished first
 
 		const { consumer, streams } = this
 		const currentContexts = this.assignedContexts
