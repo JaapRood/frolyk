@@ -148,12 +148,15 @@ class Task {
 	}
 
 	private receiveAssignments(newAssignments) {
+		// TODO: deal with multiple new assignments having come in while we're still setting up the previous one.
 		this.reassigning = this.reassign(newAssignments).catch((err) => {
 			this.events.emit('error', err)
 		})
 	}
 
 	private async reassign(newAssignments) {
+		// TODO: deal with multiple new assignments having come in while we're still setting up the previous one. Right now
+		// calling this multiple times during will cause multiple re-assignments to happen concurrently.
 		await this.reassigning // wait for previous reassigment to have finished first
 
 		const { consumer, streams } = this
