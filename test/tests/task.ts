@@ -12,6 +12,8 @@ import {
 	produceMessages
 } from '../helpers'
 
+Tap.setTimeout(60 * 1000)
+
 Tap.test('Task', async (t) => {
 	t.test('can be constructed', async (t) => {
 		t.doesNotThrow(() => {
@@ -101,12 +103,24 @@ Tap.test('Task', async (t) => {
 		})
 	})
 
-	t.test('Task.start', async (t) => {
+	await t.test('Task.start', async (t) => {
 		let testTopic, testGroup, task
+		function createTestTask () {
+			return createTask({ 
+				group: testGroup, 
+				connection: { ...kafkaConfig(), logLevel: LOG_LEVEL.ERROR }
+				// consumer: {
+				// 	sessionTimeout: 3 * 1000,
+				// 	heartbeatInterval: 500
+				// }
+			})
+		}
+
+
 		t.beforeEach(async () => {
 			testTopic = `topic-${secureRandom()}`
 			testGroup = `group-${secureRandom()}`
-			task = createTask({ group: testGroup, connection: {...kafkaConfig(), logLevel: LOG_LEVEL.ERROR }})
+			task = createTestTask()
 			await createTopic({ topic: testTopic, partitions: 2 })
 		})
 
@@ -147,7 +161,7 @@ Tap.test('Task', async (t) => {
 				.take(testMessages.length).collect().toPromise(Promise)
 
 			t.ok(processorSetup.calledTwice, 'processor setup is called for each received assignment')
-			t.ok(task.processing, 'exposes a Promise that represents the end part of the processing pipeline')
+			t.ok(task.processingSession, 'exposes a Promise that represents the session processing pipeline output')
 		})
 
 		await t.test('requires task to have been created with kafka connection information', async (t) => {
@@ -158,27 +172,87 @@ Tap.test('Task', async (t) => {
 			}, /kafka connection/, 'throws missing connection options error when starting task created without them')
 		})
 
-		await t.test('destroys the processing pipeline when any of the assignment processor setups reject', async (t) => {
-			const testSource = task.source(testTopic)
+		// await t.test('destroys the processing pipeline when any of the assignment processor setups reject', async (t) => {
+		// 	const testSource = task.source(testTopic)
 
-			const processingMessages = H()
-			const messageProcessor = spy((message) => {
-				processingMessages.write(message)
-				return message
-			})
-			const processorSetup = spy((assignment) => {
-				throw new Error('any-processor-setup-error')
-				return messageProcessor
-			})
+		// 	const processingMessages = H()
+		// 	const messageProcessor = spy((message) => {
+		// 		processingMessages.write(message)
+		// 		return message
+		// 	})
+		// 	const processorSetup = spy((assignment) => {
+		// 		throw new Error('any-processor-setup-error')
+		// 		return messageProcessor
+		// 	})
 
-			task.processor(testSource, processorSetup)
+		// 	task.processor(testSource, processorSetup)
 
 
-			// it should start up fine
-			await task.start()
+		// 	// it should start up fine
+		// 	await task.start()
 
-			// but the processing should fail
-			await t.rejects(task.processing, 'any-processor-setup-error', 'forwards any errors thrown in assignment processors to the end of the pipeline')
+		// 	// but the processing should fail
+		// 	await t.rejects(task.processingSession, 'any-processor-setup-error', 'forwards any errors thrown in assignment processors to the end of the pipeline')
+		// })
+
+		await t.test('on subsequent rebalances will end processing for active assignments before starting new one', async (t) => {
+			const setupTaskInstance = (task) => {
+				const testSource = task.source(testTopic)
+
+				const processingMessages = H()
+				const messageProcessor = spy((message) => {
+					processingMessages.write(message)
+					return message
+				})
+				const processorSetup = spy((assignment) => {
+					return messageProcessor
+				})
+				
+				task.processor(testSource, processorSetup)
+
+				const nextSessionStart = () => {
+					return new Promise((resolve) => task.events.once('session-start', resolve))
+				}
+
+				const sessionStopped = spy()
+				task.events.on('session-stop', sessionStopped)
+
+				return { 
+					task, 
+					processingMessages, 
+					messageProcessor, 
+					processorSetup, 
+					nextSessionStart,
+					sessionStopped
+				}
+			}
+
+			const testMessages = Array(100).fill({}).map((obj, n) => ({
+				value: `value-${secureRandom()}`,
+				key: `value-${secureRandom()}`,
+				partition: n % 2
+			}))
+
+			const taskOne = setupTaskInstance(task)
+			const taskTwo = setupTaskInstance(createTestTask())
+
+			const taskOneSessionStart = taskOne.nextSessionStart()
+			await taskOne.task.start()
+
+			await taskOneSessionStart
+
+			const secondSessionStarts = Promise.all([
+				taskOne.nextSessionStart(),
+				taskTwo.nextSessionStart()
+			])
+
+			await taskTwo.task.start()
+			await secondSessionStarts
+			
+			t.ok(taskOne.processorSetup.calledThrice, 'processor setup is called for every reassigment')
+			t.ok(taskOne.processorSetup.thirdCall.calledAfter(taskOne.sessionStopped.firstCall), 'stops running assignments before starting new ones')
+
+			await taskTwo.task.stop()
 		})
 	})
 })

@@ -20,7 +20,10 @@ class Task {
 	}
 
 	consumer?: any
-	processing?: Promise<any>
+	private streams?: any
+	reassigning: Promise<void>
+	assignedContexts: any[]
+	processingSession?: Promise<any>
 
 	constructor({ group, connection, consumer } : { group: string, connection?: any, consumer?: any }) {
 		this.events = new EventEmitter()
@@ -30,6 +33,9 @@ class Task {
 			connection,
 			consumer
 		}
+
+		this.assignedContexts = []
+		this.reassigning = Promise.resolve()
 	}
 
 	source(topicName) : Source {
@@ -100,7 +106,7 @@ class Task {
 			...consumerConfig,
 			groupId: `${this.group}`
 		})
-		const streams = createStreams(consumer)
+		const streams = this.streams = createStreams(consumer)
 		const consumerEvents = new EventEmitter()
 		consumer.on(consumer.events.GROUP_JOIN, (...args) => consumerEvents.emit(consumer.events.GROUP_JOIN, ...args))
 
@@ -112,50 +118,13 @@ class Task {
 			const topicPartitions = topicNames.map((topic) => {
 				return { topic, partitions: memberAssignment[topic] }
 			})
-			// consumer.pause(topicPartitions)
 	
 			return _flatMap(topicPartitions, ({ topic, partitions }) => {
 				return partitions.map((partition) => ({ topic, partition }))
 			})
-		}).flatMap((assignments : [{ topic: string, partition: number }]) => {
-			// TODO: stop any currently running assignmentes before we start setting up new ones
-			return H(assignments)
-				.filter(({ topic, partition }) => !!this.sources.find(({ topicName }) => topicName === topic))
-				.map(async ({ topic, partition }) => {
-					const source = this.sources.find(({ topicName }) => topicName === topic)
-
-					const assignment = { topic, partition, group: this.group }
-					const { processors } = source
-					const stream = streams.stream({ topic, partition })
-
-					return createKafkaAssignmentContext({ assignment, consumer, processors, stream })
-				})
-				.map((awaiting) => H(awaiting))
-				.mergeWithLimit(4) // setup 4 assignments at once
-				.collect()
-				.errors((err, push) => {
-					// this.log(['task', 'assignments', 'setup', 'error'], err, 'Error in setting up assignments processing pipeline')
-					push(err) // rethrow, as we want the pipeline to fully fail now
-				})
+		}).each((newAssignments) => {
+			this.receiveAssignments(newAssignments)
 		})
-
-		const sessionPipelines = sessionAssignmentContexts
-			.map(async (sessionContexts) => {
-				// start processing for all assignments concurrently
-				await Promise.all(sessionContexts.map((context) => context.start()))
-				
-				return sessionContexts
-			})
-			.map((awaiting) => H(awaiting)).merge()
-			// merge into one message processing pipeline for the entire session
-			.map((sessionContexts) => H(sessionContexts)
-				.map((context) => context.stream)
-				.merge() // process all messages within a session at the same time
-			)
-
-
-		const processingSessions = sessionPipelines.flatMap((sessionResults) => sessionResults) // process only a single session at a time
-	
 
 		await consumer.connect()
 
@@ -166,8 +135,6 @@ class Task {
 		}
 
 		streams.start()
-
-		this.processing = processingSessions.last().toPromise(Promise)
 	}
 
 	async stop() {
@@ -179,6 +146,67 @@ class Task {
 		// TODO: add teardown of processing pipeline
 		events.emit('stop')
 	}
+
+	private receiveAssignments(newAssignments) {
+		this.reassigning = this.reassign(newAssignments)
+	}
+
+	private async reassign(newAssignments) {
+		if (this.reassigning) await this.reassigning // wait for previous reassigment to have finished first
+
+		const { consumer, streams } = this
+		const currentContexts = this.assignedContexts
+
+		await Promise.all(currentContexts.map(async (context) => {
+			const { topic, partition } = context
+			const stream = streams.stream({ topic, partition })
+			await context.stop()
+			stream.end()
+		}))
+
+		if (this.processingSession) {
+			console.log('stopping session', this.id)
+			this.events.emit('session-stop')
+		}
+
+
+		// We're using Highland here to control concurrency, limiting ourselves to setting up 4 assignments
+		// concurrently at any given time.
+		const newSessionContexts = await H(newAssignments)
+			.filter(({ topic, partition }) => !!this.sources.find(({ topicName }) => topicName === topic))
+			.map(async ({ topic, partition }) => {
+				const source = this.sources.find(({ topicName }) => topicName === topic)
+
+				const assignment = { topic, partition, group: this.group }
+				const { processors } = source
+				const stream = streams.stream({ topic, partition })
+
+				return createKafkaAssignmentContext({ assignment, consumer, processors, stream })
+			})
+			.map((awaiting) => H(awaiting))
+			.mergeWithLimit(4) // setup 4 assignments at once
+			.collect()
+			// TODO: add specific logging for failing of assignment setup
+			.toPromise(Promise)
+
+
+		// wait for all processing of previous session to have ended
+		if (this.processingSession) await this.processingSession
+		
+		this.assignedContexts = newSessionContexts
+
+		// start processing for all assignments concurrently
+		await Promise.all(newSessionContexts.map((context) => context.start()))
+
+		this.events.emit('session-start')
+
+		this.processingSession = H(newSessionContexts)
+			.map((context) => context.stream)
+			.merge() // process all messages within a session at the same time
+			.last() // hold on to last processed result
+			.toPromise(Promise) // allow monitoring of when processing ends
+	}
+
 }
 
 export default function createTask(config) : Task {
