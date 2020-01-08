@@ -165,7 +165,6 @@ class Task {
 		}))
 
 		if (this.processingSession) {
-			console.log('stopping session', this.id)
 			this.events.emit('session-stop')
 		}
 
