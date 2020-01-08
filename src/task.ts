@@ -148,7 +148,9 @@ class Task {
 	}
 
 	private receiveAssignments(newAssignments) {
-		this.reassigning = this.reassign(newAssignments)
+		this.reassigning = this.reassign(newAssignments).catch((err) => {
+			this.events.emit('error', err)
+		})
 	}
 
 	private async reassign(newAssignments) {

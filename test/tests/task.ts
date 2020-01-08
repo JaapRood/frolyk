@@ -162,6 +162,7 @@ Tap.test('Task', async (t) => {
 
 			t.ok(processorSetup.calledTwice, 'processor setup is called for each received assignment')
 			t.ok(task.processingSession, 'exposes a Promise that represents the session processing pipeline output')
+			t.ok(task.reassigning, 'exposes a Promise that represents the reassignment process')
 		})
 
 		await t.test('requires task to have been created with kafka connection information', async (t) => {
@@ -172,28 +173,28 @@ Tap.test('Task', async (t) => {
 			}, /kafka connection/, 'throws missing connection options error when starting task created without them')
 		})
 
-		// await t.test('destroys the processing pipeline when any of the assignment processor setups reject', async (t) => {
-		// 	const testSource = task.source(testTopic)
+		await t.test('prevents processing of messages when any of the assignment processor setups reject', async (t) => {
+			const testSource = task.source(testTopic)
 
-		// 	const processingMessages = H()
-		// 	const messageProcessor = spy((message) => {
-		// 		processingMessages.write(message)
-		// 		return message
-		// 	})
-		// 	const processorSetup = spy((assignment) => {
-		// 		throw new Error('any-processor-setup-error')
-		// 		return messageProcessor
-		// 	})
+			const processingMessages = H()
+			const messageProcessor = spy((message) => {
+				processingMessages.write(message)
+				return message
+			})
+			const processorSetup = spy((assignment) => {
+				throw new Error('any-processor-setup-error')
+				return messageProcessor
+			})
 
-		// 	task.processor(testSource, processorSetup)
+			task.processor(testSource, processorSetup)
 
+			const nextError = new Promise((resolve, reject) => task.events.once('error', reject))
+			// it should start up fine
+			await task.start()
 
-		// 	// it should start up fine
-		// 	await task.start()
-
-		// 	// but the processing should fail
-		// 	await t.rejects(task.processingSession, 'any-processor-setup-error', 'forwards any errors thrown in assignment processors to the end of the pipeline')
-		// })
+			// but the processing should fail
+			await t.rejects(nextError, 'any-processor-setup-error', 'emits error events for any error thrown in assignment processors')
+		})
 
 		await t.test('on subsequent rebalances will end processing for active assignments before starting new one', async (t) => {
 			const setupTaskInstance = (task) => {
