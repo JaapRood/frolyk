@@ -1,5 +1,6 @@
 import Tap from 'tap'
 import H from 'highland'
+import Long from 'long'
 import createStreams, { Message } from '../../../src/streams'
 import createKafkaAssignmentContext from '../../../src//assignment-contexts/kafka'
 import { logLevel as LOG_LEVEL } from 'kafkajs'
@@ -11,6 +12,7 @@ import {
     createConsumer,
     createTopic,
     deleteTopic,
+    fetchOffset,
     produceMessages
 } from '../../helpers'
 
@@ -110,5 +112,37 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
             , 'applies processors to stream of messages')
         })
 
+        await t.test('assignment.commitOffset', async (t) => {
+            await t.test('can commit an offset to broker while processing messages', async () => {
+                const testMessages = Array(10).fill({}).map(() => ({
+                    value: `value-${secureRandom()}`,
+                    key: `value-${secureRandom()}`,
+                    partition: 0
+                }))
+                await produceMessages(testAssignment.topic, testMessages)
+
+                const committedOffsets = H()
+
+                const context = await testProcessor([
+                    async (assignment) => async (message) => {
+                        await assignment.commitOffset(Long.fromValue(message.offset).add(1))
+                        committedOffsets.write(await fetchOffset({ topic: testAssignment.topic, partition: 0, groupId: testAssignment.group }))
+                    }
+                ])
+                
+                const processingResults = await context.stream
+                    .take(testMessages.length)
+                    .collect()
+                    .toPromise(Promise)
+
+                const committed = await committedOffsets.take(testMessages.length).collect().toPromise(Promise)
+
+                t.equivalent(
+                    committed.map(({ offset }) => offset.toString()),
+                    testMessages.map((message, i) => `${i + 1}`)
+                )
+            })
+        })
+        
     })
 })

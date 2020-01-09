@@ -1,6 +1,8 @@
 import H from 'highland'
 import { TopicPartitionStream, Message } from '../streams'
 import { Admin, Consumer } from 'kafkajs'
+import Long from 'long'
+import Invariant from 'invariant'
 
 export default async function createContext ({
     assignment,
@@ -30,8 +32,22 @@ export default async function createContext ({
     const processorContext = {
         /* istanbul ignore next */
         async caughtUp(offset) {},
-        /* istanbul ignore next */
-        async commitOffset() {},
+        
+        async commitOffset(newOffset: string | Long, metadata: string | null = null) {
+            try {
+                newOffset = Long.fromValue(newOffset)
+            } catch (parseError) {
+                Invariant(false, 'Valid offset (parseable as Long) is required to commit offset for assignment')
+            }
+            
+            await consumer.commitOffsets([{ 
+                topic: assignment.topic,
+                partition: assignment.partition,
+                offset: newOffset.toString(),
+                metadata
+            }])
+        },
+        
         /* istanbul ignore next */
         async committed() {},
         /* istanbul ignore next */

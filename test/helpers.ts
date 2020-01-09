@@ -2,6 +2,7 @@ import Crypto from 'crypto'
 import { Kafka, logLevel as LOG_LEVEL } from 'kafkajs'
 import Uuid from 'uuid/v4'
 import Config from './config'
+import Long from 'long'
 
 export function secureRandom (length = 10) {
     return `${Crypto.randomBytes(length).toString('hex')}-${process.pid}-${Uuid()}`
@@ -79,5 +80,32 @@ export async function produceMessages (topic, messages) {
         await producer.send({ acks: 1, topic, messages })
     } finally {
         producer && (await producer.disconnect())
+    }
+}
+
+export async function fetchOffset ({ groupId, topic, partition }) {
+    const kafka = new Kafka(kafkaConfig())
+    const admin = kafka.admin()
+
+    try {
+        await admin.connect()
+        const offsets = await admin.fetchOffsets({ groupId, topic })
+
+        if (typeof partition !== "undefined") {
+            let partitionOffset = offsets.find((offset) => partition === offset.partition)
+            if (!partitionOffset) return
+
+            return {
+                ...partitionOffset,
+                offset: Long.fromString(partitionOffset.offset)
+            }
+        } else {
+            return offsets.map((partitionOffset) => ({
+                ...partitionOffset,
+                offset: Long.fromString(partitionOffset.offset)
+            }))
+        }
+    } finally {
+        admin && (await admin.disconnect())
     }
 }
