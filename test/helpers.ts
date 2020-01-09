@@ -32,6 +32,15 @@ export function createConsumer (options: { logLevel?: LOG_LEVEL, groupId?: strin
     })
 }
 
+export function createAdmin(options: { logLevel?: LOG_LEVEL } = {
+    logLevel: LOG_LEVEL.NOTHING
+}) {
+    const { logLevel } = options
+    const kafka = new Kafka(kafkaConfig({ logLevel }))
+
+    return kafka.admin()
+}
+
 export async function createTopic ({ topic, partitions = 1, config = [] }) {
     const kafka = new Kafka({ clientId: 'frolyk-tests', brokers: Config.kafka.brokers })
     const admin = kafka.admin()

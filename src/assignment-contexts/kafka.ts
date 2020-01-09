@@ -1,11 +1,12 @@
 import H from 'highland'
 import { TopicPartitionStream, Message } from '../streams'
-import { Consumer } from 'kafkajs'
+import { Admin, Consumer } from 'kafkajs'
 
 export default async function createContext ({
     assignment,
     processors,
     stream: rawStream,
+    admin,
     consumer
 }: {
     assignment: {
@@ -15,6 +16,7 @@ export default async function createContext ({
     },
     processors: any[],
     stream: TopicPartitionStream,
+    admin: Admin,
     consumer: Consumer
 }) : Promise<{
     topic: string,

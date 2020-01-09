@@ -7,6 +7,7 @@ import { spy } from 'sinon'
 
 import {
     secureRandom,
+    createAdmin,
     createConsumer,
     createTopic,
     deleteTopic,
@@ -17,12 +18,14 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
     await t.test('can be created', async (t) => {
         const testTopic = `topic-${secureRandom()}`
         const testGroup = `group-${secureRandom()}`
+        const admin = createAdmin()
         const consumer = createConsumer()
         const streams = createStreams(consumer)
         const stream = streams.stream({ topic: testTopic, partition: 0 })
         
         const context = await createKafkaAssignmentContext({
             assignment: { topic: testTopic, partition: 0, group: testGroup },
+            admin,
             consumer,
             processors: [],
             stream
@@ -30,7 +33,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
     })
 
     await t.test('processing pipeline', async (t) => {
-        let testAssignment, consumer, streams, stream
+        let testAssignment, admin, consumer, streams, stream
         
         t.beforeEach(async () => {
             testAssignment = {
@@ -38,6 +41,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                 partition: 0,
                 group: `group-${secureRandom()}`
             }
+            admin = createAdmin({ logLevel: LOG_LEVEL.ERROR })
             consumer = createConsumer({ groupId: testAssignment.group, logLevel: LOG_LEVEL.ERROR })
             streams = createStreams(consumer)
             stream = streams.stream({ topic: testAssignment.topic, partition: 0 })
@@ -55,6 +59,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
             
             return createKafkaAssignmentContext({
                 assignment,
+                admin,
                 consumer,
                 processors: setupProcessors,
                 stream
