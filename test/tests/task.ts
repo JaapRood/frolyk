@@ -207,7 +207,40 @@ Tap.test('Task', async (t) => {
 			await task.start()
 
 			// but the processing should fail
-			await t.rejects(nextError, 'any-processor-setup-error', 'emits error events for any error thrown in assignment processors')
+			await t.rejects(nextError, 'any-processor-setup-error', 'emits error events for any error thrown in assignment processors setup')
+		})
+
+		await t.test('prevents further processing of messages when an error in processing is not handled by the processors', async (t) => {
+			const testMessages = Array(10).fill({}).map(() => ({
+				value: `value-${secureRandom()}`,
+				key: `value-${secureRandom()}`,
+				partition: 0
+			}))
+			
+			const testSource = task.source(testTopic)
+
+			const messageProcessor = spy(async (message) => {
+				throw new Error('uncaught-message-process-error')
+
+				return message
+			})
+			
+			const processorSetup = spy((assignment) => {
+				return messageProcessor
+			})
+
+			task.processor(testSource, processorSetup)
+
+			const nextSessionStart = new Promise((resolve) => task.events.once('session-start', resolve))
+			const nextError = new Promise((resolve, reject) => task.events.once('error', reject))
+			
+			await task.start()
+			await nextSessionStart
+			await produceMessages(testTopic, testMessages)
+
+			await t.rejects(nextError, 'uncaught-message-process-error', 'emits error events for any error thrown in the assignment processors')
+			await new Promise((r) => setTimeout(r, 500))
+			t.ok(messageProcessor.calledOnce, 'task stops processing any additional messages')
 		})
 
 		await t.test('on subsequent rebalances will end processing for active assignments before starting new one', async (t) => {

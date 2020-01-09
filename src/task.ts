@@ -224,6 +224,10 @@ class Task {
 			.merge() // process all messages within a session at the same time
 			.last() // hold on to last processed result
 			.toPromise(Promise) // allow monitoring of when processing ends
+
+		this.processingSession.catch((err) => {
+			this.events.emit('error', err)
+		})
 	}
 
 }
