@@ -10,7 +10,10 @@ import Uuid from 'uuid/v4'
 
 export { AssignmentTestInterface }
 
+var idSeq = 0
+
 class Task {
+	id: number
 	events: EventEmitter
 	sources: Array<Source>
 	group: string
@@ -26,6 +29,7 @@ class Task {
 	processingSession?: Promise<any>
 
 	constructor({ group, connection, consumer } : { group: string, connection?: any, consumer?: any }) {
+		this.id = idSeq++
 		this.events = new EventEmitter()
 		this.sources = []
 		this.group = group
