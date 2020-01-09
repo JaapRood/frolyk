@@ -165,6 +165,9 @@ class Task {
 		const reassignmentSeq = ++this.sessionSeq
 		await this.reassigning // wait for previous reassigment to have finished first
 
+		// TODO: Figure out how we can test this. The hard bit is figuring out how we can trigger
+		// two additional rebalances while we're in the middle of setting a current one up. 
+		/* istanbul ignore next */
 		if (reassignmentSeq !== this.sessionSeq) {
 			// Additional reassignments were called since this one, while we were waiting for the last to finish,
 			// so lets discard these outdated assignments.

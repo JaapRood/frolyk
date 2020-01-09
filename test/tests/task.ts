@@ -269,5 +269,67 @@ Tap.test('Task', async (t) => {
 
 			await taskTwo.task.stop()
 		})
+
+		await t.test('on subsequent rebalances will end processing for active assignments before starting new one', { skip: true }, async (t) => {
+			const setupTaskInstance = (task) => {
+				const testSource = task.source(testTopic)
+				task.processor(testSource, async (assignment) => {
+					// give us some time to cause another rebalance
+					await new Promise((r) => setTimeout(r, 1000))
+					return (message) => message
+				})
+
+				const nextAssignmentReceive = () => new Promise((resolve) => task.events.once('assignment-receive', resolve))
+				const nextSessionStart = () => new Promise((resolve) => task.events.once('session-start', resolve))
+
+				const sessionStopped = spy(() => {
+					console.log('session stopped', task.id)
+				})
+				task.events.on('session-stop', sessionStopped)
+
+				const sessionStart = spy((sessionId) => {
+					console.log('session started', task.id, sessionId)
+				})
+				task.events.on('session-start', sessionStart)
+				task.events.on('assignment-receive', () => {
+					console.log('assignments received', task.id)
+				})
+
+				return {
+					task,
+					nextAssignmentReceive,
+					nextSessionStart,
+					sessionStopped
+				}
+			}
+
+			const taskOne = setupTaskInstance(task)
+			const taskTwo = setupTaskInstance(createTestTask())
+			const taskThree = setupTaskInstance(createTestTask())
+
+			const taskOneSecondSessionStart = taskOne.nextAssignmentReceive().then(() => taskOne.nextAssignmentReceive())
+			const taskOneFirstReceive = taskOne.nextAssignmentReceive()
+			console.log('starting task one')
+			await taskOne.task.start()
+
+			await taskOneFirstReceive
+			const taskOneSecondReceive = taskOne.nextAssignmentReceive()
+			console.log('starting task two')
+			await taskTwo.task.start()
+
+			await taskOneSecondReceive
+			const taskOneThirdReceive = taskOne.nextAssignmentReceive()
+			console.log('starting task three')
+			await taskThree.task.start()
+
+			const secondSessionId = await taskOneSecondSessionStart
+
+			t.equal(secondSessionId, 3, 'skips sessions for which setup did not start before another assignment was received')
+
+			await Promise.all([
+				taskTwo.task.stop(),
+				taskThree.task.stop()
+			])
+		})
 	})
 })
