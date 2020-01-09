@@ -105,11 +105,11 @@ Tap.test('Task', async (t) => {
 
 	await t.test('Task.start', async (t) => {
 		let testTopic, testGroup, task
-		function createTestTask () {
+		function createTestTask (consumerOptions?) {
 			return createTask({ 
 				group: testGroup, 
 				connection: { ...kafkaConfig(), logLevel: LOG_LEVEL.ERROR },
-				consumer: {
+				consumer: typeof consumerOptions !== 'undefined' ? consumerOptions : {
 					sessionTimeout: 10 * 1000,
 					heartbeatInterval: 3 * 1000
 				}
@@ -163,6 +163,20 @@ Tap.test('Task', async (t) => {
 			t.ok(processorSetup.calledTwice, 'processor setup is called for each received assignment')
 			t.ok(task.processingSession, 'exposes a Promise that represents the session processing pipeline output')
 			t.ok(task.reassigning, 'exposes a Promise that represents the reassignment process')
+		})
+
+		await t.test('can start consumption without additional consumer options passed during task creation', async (t) => {
+			task = createTestTask(null)
+			const testSource = task.source(testTopic)
+			task.processor(testSource, async (assignment) => {
+				return (message) => message
+			})
+
+			const nextSessionStart = new Promise((resolve) => task.events.once('session-start', resolve))
+
+			await task.start()
+
+			await nextSessionStart
 		})
 
 		await t.test('requires task to have been created with kafka connection information', async (t) => {
