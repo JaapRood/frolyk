@@ -27,6 +27,7 @@ class Task {
 	reassigning: Promise<void>
 	assignedContexts: any[]
 	processingSession?: Promise<any>
+	private sessionSeq: number
 
 	constructor({ group, connection, consumer } : { group: string, connection?: any, consumer?: any }) {
 		this.id = idSeq++
@@ -39,6 +40,7 @@ class Task {
 		}
 
 		this.assignedContexts = []
+		this.sessionSeq = 0
 		this.reassigning = Promise.resolve()
 	}
 
@@ -152,16 +154,22 @@ class Task {
 	}
 
 	private receiveAssignments(newAssignments) {
-		// TODO: deal with multiple new assignments having come in while we're still setting up the previous one.
+		this.events.emit('assignment-receive')
+		
 		this.reassigning = this.reassign(newAssignments).catch((err) => {
 			this.events.emit('error', err)
 		})
 	}
 
 	private async reassign(newAssignments) {
-		// TODO: deal with multiple new assignments having come in while we're still setting up the previous one. Right now
-		// calling this multiple times during will cause multiple re-assignments to happen concurrently.
+		const reassignmentSeq = ++this.sessionSeq
 		await this.reassigning // wait for previous reassigment to have finished first
+
+		if (reassignmentSeq !== this.sessionSeq) {
+			// Additional reassignments were called since this one, while we were waiting for the last to finish,
+			// so lets discard these outdated assignments.
+			return
+		}
 
 		const { consumer, streams } = this
 		const currentContexts = this.assignedContexts
@@ -206,7 +214,7 @@ class Task {
 		// start processing for all assignments concurrently
 		await Promise.all(newSessionContexts.map((context) => context.start()))
 
-		this.events.emit('session-start')
+		this.events.emit('session-start', reassignmentSeq)
 
 		this.processingSession = H(newSessionContexts)
 			.map((context) => context.stream)
