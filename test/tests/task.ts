@@ -108,11 +108,11 @@ Tap.test('Task', async (t) => {
 		function createTestTask () {
 			return createTask({ 
 				group: testGroup, 
-				connection: { ...kafkaConfig(), logLevel: LOG_LEVEL.ERROR }
-				// consumer: {
-				// 	sessionTimeout: 3 * 1000,
-				// 	heartbeatInterval: 500
-				// }
+				connection: { ...kafkaConfig(), logLevel: LOG_LEVEL.ERROR },
+				consumer: {
+					sessionTimeout: 10 * 1000,
+					heartbeatInterval: 3 * 1000
+				}
 			})
 		}
 
