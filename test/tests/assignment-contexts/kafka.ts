@@ -164,6 +164,28 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                 testMessages.map((message, i) => `${i + 1}`)
             )
         })
+
+        await t.test('assignment.commitOffset requires string offsets to be parsed as Long', async (t) => {
+            const testMessages = Array(10).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+
+            const context = await testProcessor([
+                async (assignment) => async (message) => {
+                    await assignment.commitOffset('not-a-valid-offset')
+                }
+            ])
+
+            await produceMessages(testAssignment.topic, testMessages)
+            
+            const processing = context.stream
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            await t.rejects(processing, /Valid offset/, 'throws an error requiring a valid offset')
         })
         
     })
