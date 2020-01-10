@@ -112,6 +112,29 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
             , 'applies processors to stream of messages')
         })
 
+        await t.test('propagates errors in processors through the processing stream', async (t) => {
+            const testMessages = Array(10).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+
+            await produceMessages(testAssignment.topic, testMessages)
+
+            const context = await testProcessor([
+                async (assignment) => (message) => {
+                    throw new Error('uncaught-processor-error')
+                }
+            ])
+
+            const processingResults = context.stream
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            await t.rejects(processingResults, /uncaught-processor-error/, 'testing rejection assertion')
+        })
+ 
         await t.test('assignment.commitOffset', async (t) => {
             await t.test('can commit an offset to broker while processing messages', async () => {
                 const testMessages = Array(10).fill({}).map(() => ({
