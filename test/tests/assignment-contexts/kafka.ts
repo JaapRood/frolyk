@@ -16,6 +16,50 @@ import {
     produceMessages
 } from '../../helpers'
 
+const setupAssignmentTests = (t) => {
+    let testAssignment, admin, consumer, streams, stream
+
+    t.beforeEach(async () => {
+        testAssignment = {
+            topic: `topic-${secureRandom()}`,
+            partition: 0,
+            group: `group-${secureRandom()}`
+        }
+        admin = createAdmin({ logLevel: LOG_LEVEL.ERROR })
+        consumer = createConsumer({ groupId: testAssignment.group, logLevel: LOG_LEVEL.ERROR })
+        streams = createStreams(consumer)
+        stream = streams.stream({ topic: testAssignment.topic, partition: 0 })
+        await consumer.connect()
+        await consumer.subscribe({ topic: testAssignment.topic })
+        await streams.start()
+    })
+
+    t.afterEach(async () => {
+        if (consumer) await consumer.disconnect()
+    })
+
+    const testProcessor = (setupProcessors, assignment = testAssignment) => {
+        setupProcessors = [].concat(setupProcessors) // one or more processors
+
+        return createKafkaAssignmentContext({
+            assignment,
+            admin,
+            consumer,
+            processors: setupProcessors,
+            stream
+        })
+    }
+
+    return { 
+        testAssignment: () => testAssignment, 
+        admin: () => admin, 
+        consumer: () => consumer, 
+        streams: () => streams, 
+        stream: () => stream, 
+        testProcessor
+    }
+}
+
 Tap.test('AssignmentContext.Kafka', async (t) => {
     await t.test('can be created', async (t) => {
         const testTopic = `topic-${secureRandom()}`
@@ -35,38 +79,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
     })
 
     await t.test('processing pipeline', async (t) => {
-        let testAssignment, admin, consumer, streams, stream
-        
-        t.beforeEach(async () => {
-            testAssignment = {
-                topic: `topic-${secureRandom()}`,
-                partition: 0,
-                group: `group-${secureRandom()}`
-            }
-            admin = createAdmin({ logLevel: LOG_LEVEL.ERROR })
-            consumer = createConsumer({ groupId: testAssignment.group, logLevel: LOG_LEVEL.ERROR })
-            streams = createStreams(consumer)
-            stream = streams.stream({ topic: testAssignment.topic, partition: 0 })
-            await consumer.connect()
-            await consumer.subscribe({ topic: testAssignment.topic })
-            await streams.start()
-        })
-
-        t.afterEach(async () => {
-            if (consumer) await consumer.disconnect()
-        })
-
-        const testProcessor = (setupProcessors, assignment = testAssignment) => {
-            setupProcessors = [].concat(setupProcessors) // one or more processors
-            
-            return createKafkaAssignmentContext({
-                assignment,
-                admin,
-                consumer,
-                processors: setupProcessors,
-                stream
-            })
-        }
+        const { testAssignment, testProcessor, admin, consumer, streams, stream } = setupAssignmentTests(t)
 
         await t.test('returns a stream with all processors applied in order', async (t) => {
             const testMessages = Array(100).fill({}).map(() => ({
@@ -75,7 +88,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                 partition: 0
             }))
 
-            await produceMessages(testAssignment.topic, testMessages)
+            await produceMessages(testAssignment().topic, testMessages)
             
             const processMessageOne = spy(({ key, value }) => ({ 
                 key: key.toString(), 
@@ -119,7 +132,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                 partition: 0
             }))
 
-            await produceMessages(testAssignment.topic, testMessages)
+            await produceMessages(testAssignment().topic, testMessages)
 
             const context = await testProcessor([
                 async (assignment) => (message) => {
@@ -134,21 +147,25 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
 
             await t.rejects(processingResults, /uncaught-processor-error/, 'testing rejection assertion')
         })
- 
-        await t.test('assignment.commitOffset can commit an offset to broker while processing messages', async (t) => {
+    })
+
+    await t.test('assignment.commitOffset', async (t) => {
+        const { testAssignment, testProcessor, admin, consumer, streams, stream } = setupAssignmentTests(t)
+
+        await t.test('can commit an offset to broker while processing messages', async (t) => {
             const testMessages = Array(10).fill({}).map(() => ({
                 value: `value-${secureRandom()}`,
                 key: `value-${secureRandom()}`,
                 partition: 0
             }))
-            await produceMessages(testAssignment.topic, testMessages)
+            await produceMessages(testAssignment().topic, testMessages)
 
             const committedOffsets = H()
 
             const context = await testProcessor([
                 async (assignment) => async (message) => {
                     await assignment.commitOffset(Long.fromValue(message.offset).add(1))
-                    committedOffsets.write(await fetchOffset({ topic: testAssignment.topic, partition: 0, groupId: testAssignment.group }))
+                    committedOffsets.write(await fetchOffset({ topic: testAssignment().topic, partition: 0, groupId: testAssignment().group }))
                 }
             ])
             
@@ -165,7 +182,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
             )
         })
 
-        await t.test('assignment.commitOffset requires string offsets to be parsed as Long', async (t) => {
+        await t.test('requires string offsets to be parsed as Long', async (t) => {
             const testMessages = Array(10).fill({}).map(() => ({
                 value: `value-${secureRandom()}`,
                 key: `value-${secureRandom()}`,
@@ -178,7 +195,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                 }
             ])
 
-            await produceMessages(testAssignment.topic, testMessages)
+            await produceMessages(testAssignment().topic, testMessages)
             
             const processing = context.stream
                 .take(testMessages.length)
@@ -187,6 +204,5 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
 
             await t.rejects(processing, /Valid offset/, 'throws an error requiring a valid offset')
         })
-        
     })
 })
