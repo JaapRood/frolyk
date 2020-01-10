@@ -135,36 +135,35 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
             await t.rejects(processingResults, /uncaught-processor-error/, 'testing rejection assertion')
         })
  
-        await t.test('assignment.commitOffset', async (t) => {
-            await t.test('can commit an offset to broker while processing messages', async () => {
-                const testMessages = Array(10).fill({}).map(() => ({
-                    value: `value-${secureRandom()}`,
-                    key: `value-${secureRandom()}`,
-                    partition: 0
-                }))
-                await produceMessages(testAssignment.topic, testMessages)
+        await t.test('assignment.commitOffset can commit an offset to broker while processing messages', async (t) => {
+            const testMessages = Array(10).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+            await produceMessages(testAssignment.topic, testMessages)
 
-                const committedOffsets = H()
+            const committedOffsets = H()
 
-                const context = await testProcessor([
-                    async (assignment) => async (message) => {
-                        await assignment.commitOffset(Long.fromValue(message.offset).add(1))
-                        committedOffsets.write(await fetchOffset({ topic: testAssignment.topic, partition: 0, groupId: testAssignment.group }))
-                    }
-                ])
-                
-                const processingResults = await context.stream
-                    .take(testMessages.length)
-                    .collect()
-                    .toPromise(Promise)
+            const context = await testProcessor([
+                async (assignment) => async (message) => {
+                    await assignment.commitOffset(Long.fromValue(message.offset).add(1))
+                    committedOffsets.write(await fetchOffset({ topic: testAssignment.topic, partition: 0, groupId: testAssignment.group }))
+                }
+            ])
+            
+            const processingResults = await context.stream
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
 
-                const committed = await committedOffsets.take(testMessages.length).collect().toPromise(Promise)
+            const committed = await committedOffsets.take(testMessages.length).collect().toPromise(Promise)
 
-                t.equivalent(
-                    committed.map(({ offset }) => offset.toString()),
-                    testMessages.map((message, i) => `${i + 1}`)
-                )
-            })
+            t.equivalent(
+                committed.map(({ offset }) => offset.toString()),
+                testMessages.map((message, i) => `${i + 1}`)
+            )
+        })
         })
         
     })
