@@ -1,7 +1,7 @@
 import H from 'highland'
 import Long from 'long'
 
-import { OffsetAndMetadata } from './index'
+import { OffsetAndMetadata, Watermarks } from './index'
 
 export interface AssignmentTestInterface {
 	inject(payload: { topic: string, partition: number, value: any })
@@ -205,7 +205,7 @@ const createContext = async function({
 			})
 		},
 
-		async watermarks() : Promise<{ highOffset: string, lowOffset: string }> {
+		async watermarks() : Promise<Watermarks> {
 			return {
 				highOffset: highOffset().toString(),
 				lowOffset: lowOffset().toString()

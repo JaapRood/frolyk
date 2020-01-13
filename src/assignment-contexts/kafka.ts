@@ -4,7 +4,7 @@ import Long from 'long'
 import Invariant from 'invariant'
 
 import { TopicPartitionStream, Message } from '../streams'
-import { OffsetAndMetadata } from './index'
+import { OffsetAndMetadata, Watermarks } from './index'
 
 export default async function createContext ({
     assignment,
@@ -85,6 +85,7 @@ export default async function createContext ({
 
             return watermarks.high.subtract(watermarks.low).lte(0)
         },
+
         /* istanbul ignore next */
         async log() {},
         /* istanbul ignore next */
@@ -92,7 +93,14 @@ export default async function createContext ({
         /* istanbul ignore next */
         async send() { },
         /* istanbul ignore next */
-        async watermarks() {},
+        async watermarks() : Promise<Watermarks> {
+            const { high, low } = await fetchWatermarks()
+            
+            return {
+                highOffset: high.toString(),
+                lowOffset: low.toString()
+            }
+        },
 
         topic: assignment.topic,
         partition: assignment.partition,

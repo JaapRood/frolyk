@@ -4,7 +4,7 @@ import Long from 'long'
 import createStreams, { Message } from '../../../src/streams'
 import createKafkaAssignmentContext from '../../../src/assignment-contexts/kafka'
 import { logLevel as LOG_LEVEL, CompressionTypes } from 'kafkajs'
-import { OffsetAndMetadata } from '../../../src/assignment-contexts/index'
+import { OffsetAndMetadata, Watermarks } from '../../../src/assignment-contexts/index'
 import { spy } from 'sinon'
 
 import {
@@ -457,6 +457,56 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                 processResults,
                 testMessages.map(() => false)
                 , 'returns false when partitions contains messages')
+        })
+    })
+
+    await t.test('assignment.watermarks', async (t) => {
+        const { testAssignment, testProcessor, admin, consumer, streams, stream } = setupAssignmentTests(t)
+
+        await t.test('can query whether partition of assignment is empty', async (t) => {
+            const testMessages = Array(15).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+
+            const watermarksResults: Highland.Stream<Watermarks> = H()
+
+            const context = await testProcessor([
+                async (assignment) => {
+                    watermarksResults.write(await assignment.watermarks())
+
+                    return async (message) => {
+                        watermarksResults.write(await assignment.watermarks())
+                    }
+                }
+            ])
+
+            await produceMessages(testAssignment().topic, testMessages)
+
+            const processingResults = await context.stream
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            watermarksResults.end()
+            const results = await watermarksResults.collect().toPromise(Promise)
+            t.equal(results.length, testMessages.length + 1)
+
+            const [setupResult, ...processResults] = results
+
+            t.equivalent(
+                setupResult, 
+                { highOffset: '0', lowOffset: '0' }
+            , 'returns high and low offsets of 0 for new and empty partitions')
+
+            t.equivalent(
+                processResults,
+                testMessages.map(() => ({
+                    highOffset: `${testMessages.length}`,
+                    lowOffset: '0'
+                }))
+            , 'returns min and max offsets for partition of assignment')
         })
     })
 })

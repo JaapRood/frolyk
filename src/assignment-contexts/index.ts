@@ -16,3 +16,8 @@ export interface OffsetAndMetadata {
 	offset: string,
 	metadata: string | null
 }
+
+export interface Watermarks {
+	highOffset: string,
+	lowOffset: string
+}
