@@ -79,8 +79,12 @@ export default async function createContext ({
 
             return { offset, metadata }
         },
-        /* istanbul ignore next */
-        async isEmpty() {},
+        
+        async isEmpty() : Promise<boolean> {
+            const watermarks = await fetchWatermarks()
+
+            return watermarks.high.subtract(watermarks.low).lte(0)
+        },
         /* istanbul ignore next */
         async log() {},
         /* istanbul ignore next */
@@ -88,7 +92,7 @@ export default async function createContext ({
         /* istanbul ignore next */
         async send() { },
         /* istanbul ignore next */
-        async watermarks() { },
+        async watermarks() {},
 
         topic: assignment.topic,
         partition: assignment.partition,

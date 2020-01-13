@@ -415,4 +415,48 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                 , 'returns metatdata committed with offsets ')
         })
     })
+
+    await t.test('assignment.isEmpty', async (t) => {
+        const { testAssignment, testProcessor, admin, consumer, streams, stream } = setupAssignmentTests(t)
+
+        await t.test('can query whether partition of assignment is empty', async (t) => {
+            const testMessages = Array(10).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+
+            const isEmpyResults: Highland.Stream<OffsetAndMetadata> = H()
+
+            const context = await testProcessor([
+                async (assignment) => {
+                    isEmpyResults.write(await assignment.isEmpty())
+
+                    return async (message) => {
+                        isEmpyResults.write(await assignment.isEmpty())
+                    }
+                }
+            ])
+
+            await produceMessages(testAssignment().topic, testMessages)
+
+            const processingResults = await context.stream
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            isEmpyResults.end()
+            const results = await isEmpyResults.collect().toPromise(Promise)
+            t.equal(results.length, testMessages.length + 1)
+
+            const [setupResult, ...processResults] = results
+
+            t.equal(setupResult, true, 'returns true when partition contains no messages')
+
+            t.equivalent(
+                processResults,
+                testMessages.map(() => false)
+                , 'returns false when partitions contains messages')
+        })
+    })
 })
