@@ -11,6 +11,7 @@ import {
     secureRandom,
     createAdmin,
     createConsumer,
+    createProducer,
     createTopic,
     deleteTopic,
     fetchOffset,
@@ -18,9 +19,10 @@ import {
 } from '../../helpers'
 
 const setupAssignmentTests = (t) => {
-    let testAssignment, admin, consumer, streams, stream
+    let testAssignment, admin, consumer, streams, stream, contexts
 
     t.beforeEach(async () => {
+        contexts = []
         testAssignment = {
             topic: `topic-${secureRandom()}`,
             partition: 0,
@@ -39,18 +41,27 @@ const setupAssignmentTests = (t) => {
     t.afterEach(async () => {
         if (consumer) await consumer.disconnect()
         if (admin) await admin.disconnect()
+        for (let context of contexts) {
+            await context.stop()
+        }
     })
 
-    const testProcessor = (setupProcessors, assignment = testAssignment) => {
+    const testProcessor = async (setupProcessors, assignment = testAssignment) => {
         setupProcessors = [].concat(setupProcessors) // one or more processors
 
-        return createKafkaAssignmentContext({
+
+        const context = await createKafkaAssignmentContext({
             assignment,
             admin,
             consumer,
+            createProducer: () => createProducer({ logLevel: LOG_LEVEL.ERROR }),
             processors: setupProcessors,
             stream
         })
+
+        contexts.push(context)
+
+        return context
     }
 
     return { 
@@ -76,6 +87,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
             assignment: { topic: testTopic, partition: 0, group: testGroup },
             admin,
             consumer,
+            createProducer: () => createProducer({ logLevel: LOG_LEVEL.ERROR }),
             processors: [],
             stream
         })

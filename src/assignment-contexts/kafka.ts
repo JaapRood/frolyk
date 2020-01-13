@@ -1,16 +1,18 @@
 import H from 'highland'
-import { Admin, Consumer } from 'kafkajs'
+import { Admin, Consumer, Producer, CompressionTypes } from 'kafkajs'
 import Long from 'long'
 import Invariant from 'invariant'
+import _groupBy from 'lodash.groupby'
 
 import { TopicPartitionStream, Message } from '../streams'
-import { OffsetAndMetadata, Watermarks } from './index'
+import { OffsetAndMetadata, Watermarks, NewMessage, ProducedMessageMetadata } from './index'
 
 export default async function createContext ({
     assignment,
     processors,
     stream: rawStream,
     admin,
+    createProducer,
     consumer
 }: {
     assignment: {
@@ -21,6 +23,7 @@ export default async function createContext ({
     processors: any[],
     stream: TopicPartitionStream,
     admin: Admin,
+    createProducer: () => Producer,
     consumer: Consumer
 }) : Promise<{
     topic: string,
@@ -30,6 +33,7 @@ export default async function createContext ({
     stop () : Promise<any>
 }> {
     const controlledStream = H(rawStream)
+    const producer = createProducer()
 
     /* istanbul ignore next */
     const fetchWatermarks = async () => {
@@ -90,8 +94,27 @@ export default async function createContext ({
         async log() {},
         /* istanbul ignore next */
         async seek() {},
-        /* istanbul ignore next */
-        async send() { },
+        
+
+        async send(messages: NewMessage[]): Promise<ProducedMessageMetadata[]> {
+            const messagesByTopic = _groupBy(messages, (message) => message.topic)
+            const topics = Object.keys(messagesByTopic)
+            const topicMessages = topics.reduce((topicMessages, topic) => {
+                topicMessages.push({
+                    topic,
+                    messages: messagesByTopic[topic]
+                })
+                return topicMessages
+            }, [])
+
+            // TODO: incorporate acks, timeouts and compression into API somehow
+            return producer.sendBatch({
+                topicMessages, 
+                acks: -1,
+                timeout: 30 * 1000,
+                compression: CompressionTypes.None
+            })
+        },
         /* istanbul ignore next */
         async watermarks() : Promise<Watermarks> {
             const { high, low } = await fetchWatermarks()
@@ -122,9 +145,11 @@ export default async function createContext ({
 
         stream: processedStream,
         
-        /* istanbul ignore next */
-        async start() {},
-        /* istanbul ignore next */
-        async stop() {}
+        async start() {
+            await producer.connect()
+        },
+        async stop() {
+            await producer.disconnect()
+        }
     }
 }
