@@ -11,3 +11,8 @@ export interface AssignmentContext {
 	partition: number,
 	group: string
 }
+
+export interface OffsetAndMetadata {
+	offset: string,
+	metadata: string | null
+}

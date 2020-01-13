@@ -2,8 +2,9 @@ import Tap from 'tap'
 import H from 'highland'
 import Long from 'long'
 import createStreams, { Message } from '../../../src/streams'
-import createKafkaAssignmentContext from '../../../src//assignment-contexts/kafka'
+import createKafkaAssignmentContext from '../../../src/assignment-contexts/kafka'
 import { logLevel as LOG_LEVEL, CompressionTypes } from 'kafkajs'
+import { OffsetAndMetadata } from '../../../src/assignment-contexts/index'
 import { spy } from 'sinon'
 
 import {
@@ -332,6 +333,86 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                 .toPromise(Promise)
 
             await t.rejects(processing, /Valid offset/, 'throws an error requiring a valid offset')
+        })
+    })
+
+    await t.test('assignment.committed', async (t) => {
+        const { testAssignment, testProcessor, admin, consumer, streams, stream } = setupAssignmentTests(t)
+
+        await t.test('can query the last committed offset for the consumer', async (t) => {
+            const testMessages = Array(10).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+
+            const committedResults : Highland.Stream<OffsetAndMetadata> = H()
+
+            const context = await testProcessor([
+                async (assignment) => {
+                    committedResults.write(await assignment.committed())
+
+                    return async (message) => {
+                        await assignment.commitOffset(Long.fromValue(message.offset).add(1))
+                        committedResults.write(await assignment.committed())
+                    }
+                }
+            ])
+
+            await produceMessages(testAssignment().topic, testMessages)
+
+            const processingResults = await context.stream
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            committedResults.end()
+            const results = await committedResults.collect().toPromise(Promise)
+            t.equal(results.length, testMessages.length + 1)
+
+            const [setupResult, ...processResults] = results
+
+            t.equal(setupResult.offset, '-1', 'returns -1 when no commit for partition was made with consumer group')
+
+            t.equivalent(
+                processResults.map(({ offset }) => offset),
+                testMessages.map((message, i) => `${i + 1}`)
+                , 'returns current offset when consumer has offset committed for partition')
+        })
+
+        await t.test('can query the last committed offset with metadata commit for the consumer', async (t) => {
+            const testMessages = Array(10).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+
+            const committedResults: Highland.Stream<OffsetAndMetadata> = H()
+
+            const context = await testProcessor([
+                async (assignment) => {
+                    return async (message) => {
+                        await assignment.commitOffset(Long.fromValue(message.offset).add(1), message.value.toString('utf-8'))
+                        committedResults.write(await assignment.committed())
+                    }
+                }
+            ])
+
+            await produceMessages(testAssignment().topic, testMessages)
+
+            const processingResults = await context.stream
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            committedResults.end()
+            const results = await committedResults.collect().toPromise(Promise)
+            t.equal(results.length, testMessages.length)
+
+            t.equivalent(
+                results.map(({ metadata }) => metadata),
+                testMessages.map((message, i) => message.value)
+                , 'returns metatdata committed with offsets ')
         })
     })
 })

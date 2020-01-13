@@ -1,8 +1,10 @@
 import H from 'highland'
-import { TopicPartitionStream, Message } from '../streams'
 import { Admin, Consumer } from 'kafkajs'
 import Long from 'long'
 import Invariant from 'invariant'
+
+import { TopicPartitionStream, Message } from '../streams'
+import { OffsetAndMetadata } from './index'
 
 export default async function createContext ({
     assignment,
@@ -41,7 +43,7 @@ export default async function createContext ({
     }
 
     const processorContext = {
-        async caughtUp(offset: string | Long) {
+        async caughtUp(offset: string | Long) : Promise<boolean> {
             var offsetLong : Long
             try {
                 offsetLong = Long.fromValue(offset)
@@ -54,7 +56,7 @@ export default async function createContext ({
             return watermarks.high.lt(1) || offsetLong.gte(watermarks.high)
         },
         
-        async commitOffset(newOffset: string | Long, metadata: string | null = null) {
+        async commitOffset(newOffset: string | Long, metadata: string | null = null) : Promise<void> {
             try {
                 newOffset = Long.fromValue(newOffset)
             } catch (parseError) {
@@ -69,8 +71,14 @@ export default async function createContext ({
             }])
         },
         
-        /* istanbul ignore next */
-        async committed() {},
+        async committed(): Promise<OffsetAndMetadata> {
+            const payload = { groupId: assignment.group, topic: assignment.topic }
+
+            const partitionOffsets = await admin.fetchOffsets(payload)
+            const { offset, metadata } = partitionOffsets.find(({ partition }) => partition === assignment.partition)
+
+            return { offset, metadata }
+        },
         /* istanbul ignore next */
         async isEmpty() {},
         /* istanbul ignore next */

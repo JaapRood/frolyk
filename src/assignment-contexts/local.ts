@@ -1,6 +1,8 @@
 import H from 'highland'
 import Long from 'long'
 
+import { OffsetAndMetadata } from './index'
+
 export interface AssignmentTestInterface {
 	inject(payload: { topic: string, partition: number, value: any })
 	committedOffsets: OffsetAndMetadata[],
@@ -24,11 +26,6 @@ export interface Message {
 	value: Buffer | null,
 	key: Buffer | null,
 	offset: string
-}
-
-export interface OffsetAndMetadata {
-	offset: string,
-	metadata: string | null
 }
 
 enum LogicalOffset {
