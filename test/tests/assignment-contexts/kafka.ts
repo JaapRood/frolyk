@@ -234,5 +234,36 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                 testMessages.map(({ value }, i) => value)
             )
         })
+
+        await t.test('can commit an offset to broker while setting up assignment', async (t) => {
+            const testMessages = Array(10).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+            await produceMessages(testAssignment().topic, testMessages)
+
+            const committedOffsets = H()
+
+            const context = await testProcessor([
+                async (assignment) => {
+                    await assignment.commitOffset(Long.fromNumber(testMessages.length / 2))
+                    committedOffsets.write(await fetchOffset({ topic: testAssignment().topic, partition: 0, groupId: testAssignment().group }))
+
+                    return (message) => message
+                }
+            ])
+
+            const processingResults = await context.stream
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            committedOffsets.end()
+            const committed : any[] = await committedOffsets.collect().toPromise(Promise)
+
+            t.equal(committed.length, 1)
+            t.equal(committed[0].offset.toString(), `${testMessages.length / 2}`, )
+        })
     })
 })
