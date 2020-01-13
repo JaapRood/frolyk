@@ -3,7 +3,7 @@ import H from 'highland'
 import Long from 'long'
 import createStreams, { Message } from '../../../src/streams'
 import createKafkaAssignmentContext from '../../../src//assignment-contexts/kafka'
-import { logLevel as LOG_LEVEL } from 'kafkajs'
+import { logLevel as LOG_LEVEL, CompressionTypes } from 'kafkajs'
 import { spy } from 'sinon'
 
 import {
@@ -184,7 +184,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
             )
         })
 
-        await t.test('requires string offsets to be parsed as Long', async (t) => {
+        await t.test('requires string offsets to be parseable as Long', async (t) => {
             const testMessages = Array(10).fill({}).map(() => ({
                 value: `value-${secureRandom()}`,
                 key: `value-${secureRandom()}`,
@@ -266,6 +266,72 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
 
             t.equal(committed.length, 1)
             t.equal(committed[0].offset.toString(), `${testMessages.length / 2}`, )
+        })
+    })
+
+    await t.test('assignment.caughtUp', async (t) => {
+        const { testAssignment, testProcessor, admin, consumer, streams, stream } = setupAssignmentTests(t)
+
+        await t.test('can query whether the assignment has caught up to the end of the log given an offset', async (t) => {
+            const testMessages = Array(10).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+
+            const caughtUpResults = H()
+
+            const context = await testProcessor([
+                async (assignment) => {
+                    caughtUpResults.write(await assignment.caughtUp('0'))
+
+                    return async (message) => {
+                        caughtUpResults.write(await assignment.caughtUp(Long.fromValue(message.offset).add(1)))
+                    }
+                }
+            ])
+
+            await produceMessages(testAssignment().topic, testMessages)
+
+            const processingResults = await context.stream
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            caughtUpResults.end()
+            const results = await caughtUpResults.collect().toPromise(Promise)
+            t.equal(results.length, testMessages.length + 1)
+
+            const [setupResult, ...processResults] = results
+
+            t.equal(setupResult, true, 'returns true for empty logs')
+            t.equivalent(
+                processResults,
+                testMessages.map((message, i) => i + 1 === testMessages.length)
+            , 'returns true when passed offset is at the highwater mark of the partition')
+        })
+
+        await t.test('requires string offsets to be parseable as Long', async (t) => {
+            const testMessages = Array(10).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+
+            const context = await testProcessor([
+                async (assignment) => async (message) => {
+                    await assignment.caughtUp('not-a-valid-offset')
+                }
+            ])
+
+            await produceMessages(testAssignment().topic, testMessages)
+
+            const processing = context.stream
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            await t.rejects(processing, /Valid offset/, 'throws an error requiring a valid offset')
         })
     })
 })

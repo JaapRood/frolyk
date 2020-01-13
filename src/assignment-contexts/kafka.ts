@@ -29,9 +29,30 @@ export default async function createContext ({
 }> {
     const controlledStream = H(rawStream)
 
+    /* istanbul ignore next */
+    const fetchWatermarks = async () => {
+        const offsets = await admin.fetchTopicOffsets(assignment.topic)
+        const partitionOffset = offsets.find((offset) => assignment.partition === offset.partition)
+
+        return {
+            high: partitionOffset.high && Long.fromString(partitionOffset.high),
+            low: partitionOffset.low && Long.fromString(partitionOffset.low)
+        }
+    }
+
     const processorContext = {
-        /* istanbul ignore next */
-        async caughtUp(offset) {},
+        async caughtUp(offset: string | Long) {
+            var offsetLong : Long
+            try {
+                offsetLong = Long.fromValue(offset)
+            } catch (parseError) {
+                Invariant(false, 'Valid offset (parseable as Long) is required to verify the assignment is caught up at it')
+            }
+
+            const watermarks = await fetchWatermarks()
+
+            return watermarks.high.lt(1) || offsetLong.gte(watermarks.high)
+        },
         
         async commitOffset(newOffset: string | Long, metadata: string | null = null) {
             try {
