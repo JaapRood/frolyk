@@ -29,6 +29,7 @@ const setupAssignmentTests = (t) => {
         consumer = createConsumer({ groupId: testAssignment.group, logLevel: LOG_LEVEL.ERROR })
         streams = createStreams(consumer)
         stream = streams.stream({ topic: testAssignment.topic, partition: 0 })
+        await admin.connect()
         await consumer.connect()
         await consumer.subscribe({ topic: testAssignment.topic })
         await streams.start()
@@ -36,6 +37,7 @@ const setupAssignmentTests = (t) => {
 
     t.afterEach(async () => {
         if (consumer) await consumer.disconnect()
+        if (admin) await admin.disconnect()
     })
 
     const testProcessor = (setupProcessors, assignment = testAssignment) => {
