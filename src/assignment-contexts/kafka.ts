@@ -97,7 +97,7 @@ export default async function createContext ({
         
 
         async send(messages: NewMessage | NewMessage[]): Promise<ProducedMessageMetadata[]> {
-            messages = [].concat(messages)
+            if (!Array.isArray(messages)) messages = [messages]
             const messagesByTopic = _groupBy(messages, (message) => message.topic)
             const topics = Object.keys(messagesByTopic)
             const topicMessages = topics.reduce((topicMessages, topic) => {
