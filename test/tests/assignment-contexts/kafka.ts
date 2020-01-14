@@ -600,6 +600,45 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
 
             t.equivalent(inputRecords, outputRecords)
         })
+
+        await t.test('can produce a single message instead of an array', async (t) => {
+            const testMessages = Array(15).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+
+            const context = await testProcessor([
+                async (assignment) => {
+                    for (let message of testMessages) {
+                        await assignment.send({
+                            ...message,
+                            topic: outputAssignment.topic
+                        })
+                    }
+
+                    return async (message) => {
+                        return {
+                            key: message.key.toString('utf-8'),
+                            value: message.value.toString('utf-8')
+                        }
+                    }
+                }
+
+            ], outputAssignment)
+
+            await produceMessages(inputAssignment().topic, testMessages)
+
+            const processingResults = await context.stream
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            const inputRecords = testMessages.map(({ key, value }) => ({ key, value }))
+            const outputRecords = processingResults.map(({ key, value }) => ({ key, value }))
+
+            t.equivalent(inputRecords, outputRecords)
+        })
     })
 
     await t.test('assignment.watermarks', async (t) => {
