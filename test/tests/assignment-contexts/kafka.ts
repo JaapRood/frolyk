@@ -502,6 +502,107 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
         })
     })
 
+    await t.test('assignment.send', async (t) => {
+        const { testAssignment: inputAssignment, testProcessor, testTopic, start } = setupAssignmentTests(t, false)
+        var outputAssignment
+
+        t.beforeEach(async () => {
+            let outputTopic = testTopic(1)
+            outputAssignment = {
+                topic: outputTopic.topic,
+                partition: 0,
+                group: inputAssignment().group
+            }
+
+            await start()
+        })
+
+        await t.test('can produce messages to a topic during message processing', async (t) => {
+            const testMessages = Array(15).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+
+            const inputContext = await testProcessor([
+                async (assignment) => async (message) => {
+                    await assignment.send([{
+                        topic: outputAssignment.topic,
+                        partition: outputAssignment.partition,
+                        key: message.key,
+                        value: message.value
+                    }])
+                }
+            ], inputAssignment())
+
+            const outputContext = await testProcessor([
+                async (assignment) => async (message) => {
+                    return {
+                        key: message.key.toString('utf-8'),
+                        value: message.value.toString('utf-8')
+                    }
+                }
+            ], outputAssignment)
+
+            await produceMessages(inputAssignment().topic, testMessages)
+
+            const processingResults = await Promise.all([
+                inputContext.stream
+                    .take(testMessages.length)
+                    .collect()
+                    .toPromise(Promise),
+                outputContext.stream
+                    .take(testMessages.length)
+                    .collect()
+                    .toPromise(Promise)
+            ])
+            
+            const producedMessages = processingResults[1]
+
+            const inputRecords = testMessages.map(({ key, value }) => ({ key, value }))
+            const outputRecords = producedMessages.map(({ key, value }) => ({ key, value }))
+
+            t.equivalent(inputRecords, outputRecords)
+        })
+
+        await t.test('can produce messages to a topic during processor setup', async (t) => {
+            const testMessages = Array(15).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+
+            const context = await testProcessor([
+                async (assignment) => {
+                    await assignment.send(testMessages.map((msg) => ({
+                        ...msg,
+                        topic: outputAssignment.topic
+                    })))
+
+                    return async (message) => {
+                        return {
+                            key: message.key.toString('utf-8'),
+                            value: message.value.toString('utf-8')
+                        }
+                    }
+                }
+
+            ], outputAssignment)
+
+            await produceMessages(inputAssignment().topic, testMessages)
+
+            const processingResults = await context.stream
+                .take(testMessages.length)
+                .collect()
+                .toPromise(Promise)
+
+            const inputRecords = testMessages.map(({ key, value }) => ({ key, value }))
+            const outputRecords = processingResults.map(({ key, value }) => ({ key, value }))
+
+            t.equivalent(inputRecords, outputRecords)
+        })
+    })
+
     await t.test('assignment.watermarks', async (t) => {
         const { testAssignment, testProcessor } = setupAssignmentTests(t)
 
