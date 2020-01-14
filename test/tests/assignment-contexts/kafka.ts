@@ -17,36 +17,24 @@ import {
     fetchOffset,
     produceMessages
 } from '../../helpers'
+import { start } from 'repl'
 
-const setupAssignmentTests = (t) => {
-    let testAssignment, admin, consumer, streams, contexts
+const setupAssignmentTests = (t, autoStart = true) => {
+    let testAssignment, admin, consumer, streams, contexts, topics
 
-    t.beforeEach(async () => {
-        contexts = []
-        testAssignment = {
-            topic: `topic-${secureRandom()}`,
-            partition: 0,
-            group: `group-${secureRandom()}`
+    const testTopic = (partitions = 1) => {
+        partitions = Math.max(1, partitions)
+        const uniqueId = secureRandom()
+        const topic = {
+            topic: `topic-${uniqueId}`,
+            partitions
         }
-        admin = createAdmin({ logLevel: LOG_LEVEL.ERROR })
-        consumer = createConsumer({ groupId: testAssignment.group, logLevel: LOG_LEVEL.ERROR })
-        streams = createStreams(consumer)
-        await createTopic({ topic: testAssignment.topic, partitions: 1 })
-        await admin.connect()
-        await consumer.connect()
-        await consumer.subscribe({ topic: testAssignment.topic })
-        await streams.start()
-    })
+        
+        topics.push(topic)
 
-    t.afterEach(async () => {
-        if (consumer) await consumer.disconnect()
-        if (admin) await admin.disconnect()
-        for (let context of contexts) {
-            await context.stop()
-        }
-        await deleteTopic(testAssignment.topic)
-    })
-
+        return topic
+    }
+    
     const testProcessor = async (setupProcessors, assignment = testAssignment) => {
         setupProcessors = [].concat(setupProcessors) // one or more processors
 
@@ -65,11 +53,54 @@ const setupAssignmentTests = (t) => {
         return context
     }
 
-    return { 
+    const start = async () => {
+        for (let { topic, partitions } of topics) {
+            await createTopic({ topic, partitions })
+            await consumer.subscribe({ topic, fromBeginning: true })
+        }
+        await admin.connect()
+        await consumer.connect()
+        await streams.start()
+        for (let context of contexts) {
+            await context.start()
+        }
+    }
+
+    t.beforeEach(async () => {
+        contexts = []
+        topics = []
+        let defaultTopic = testTopic()
+        testAssignment = {
+            topic: defaultTopic.topic,
+            partition: 0,
+            group: `group-${secureRandom()}`
+        }
+        admin = createAdmin({ logLevel: LOG_LEVEL.ERROR })
+        consumer = createConsumer({ groupId: testAssignment.group, logLevel: LOG_LEVEL.ERROR })
+        streams = createStreams(consumer)
+
+        if (autoStart) {
+            await start()
+        }
+    })
+
+    t.afterEach(async () => {
+        if (consumer) await consumer.disconnect()
+        if (admin) await admin.disconnect()
+        for (let context of contexts) {
+            await context.stop()
+        }
+        for (let { topic } of topics) {
+            await deleteTopic(topic)
+        }
+    })
+
+    return {
+        testTopic,
         testAssignment: () => testAssignment, 
         admin: () => admin, 
         consumer: () => consumer, 
-        streams: () => streams,
+        start,
         testProcessor
     }
 }
@@ -94,7 +125,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
     })
 
     await t.test('processing pipeline', async (t) => {
-        const { testAssignment, testProcessor, admin, consumer, streams } = setupAssignmentTests(t)
+        const { testAssignment, testProcessor } = setupAssignmentTests(t)
 
         await t.test('returns a stream with all processors applied in order', async (t) => {
             const testMessages = Array(100).fill({}).map(() => ({
@@ -236,7 +267,6 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                 }
             ])
 
-
             const processingResults = await context.stream
                 .take(testMessages.length)
                 .collect()
@@ -349,7 +379,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
     })
 
     await t.test('assignment.committed', async (t) => {
-        const { testAssignment, testProcessor, admin, consumer, streams } = setupAssignmentTests(t)
+        const { testAssignment, testProcessor } = setupAssignmentTests(t)
 
         await t.test('can query the last committed offset for the consumer', async (t) => {
             const testMessages = Array(10).fill({}).map(() => ({
