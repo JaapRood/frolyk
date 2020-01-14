@@ -19,7 +19,7 @@ import {
 } from '../../helpers'
 
 const setupAssignmentTests = (t) => {
-    let testAssignment, admin, consumer, streams, stream, contexts
+    let testAssignment, admin, consumer, streams, contexts
 
     t.beforeEach(async () => {
         contexts = []
@@ -31,7 +31,7 @@ const setupAssignmentTests = (t) => {
         admin = createAdmin({ logLevel: LOG_LEVEL.ERROR })
         consumer = createConsumer({ groupId: testAssignment.group, logLevel: LOG_LEVEL.ERROR })
         streams = createStreams(consumer)
-        stream = streams.stream({ topic: testAssignment.topic, partition: 0 })
+        await createTopic({ topic: testAssignment.topic, partitions: 1 })
         await admin.connect()
         await consumer.connect()
         await consumer.subscribe({ topic: testAssignment.topic })
@@ -44,6 +44,7 @@ const setupAssignmentTests = (t) => {
         for (let context of contexts) {
             await context.stop()
         }
+        await deleteTopic(testAssignment.topic)
     })
 
     const testProcessor = async (setupProcessors, assignment = testAssignment) => {
@@ -56,7 +57,7 @@ const setupAssignmentTests = (t) => {
             consumer,
             createProducer: () => createProducer({ logLevel: LOG_LEVEL.ERROR }),
             processors: setupProcessors,
-            stream
+            stream: streams.stream({ topic: assignment.topic, partition: assignment.partition })
         })
 
         contexts.push(context)
@@ -68,8 +69,7 @@ const setupAssignmentTests = (t) => {
         testAssignment: () => testAssignment, 
         admin: () => admin, 
         consumer: () => consumer, 
-        streams: () => streams, 
-        stream: () => stream, 
+        streams: () => streams,
         testProcessor
     }
 }
@@ -94,7 +94,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
     })
 
     await t.test('processing pipeline', async (t) => {
-        const { testAssignment, testProcessor, admin, consumer, streams, stream } = setupAssignmentTests(t)
+        const { testAssignment, testProcessor, admin, consumer, streams } = setupAssignmentTests(t)
 
         await t.test('returns a stream with all processors applied in order', async (t) => {
             const testMessages = Array(100).fill({}).map(() => ({
@@ -165,7 +165,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
     })
 
     await t.test('assignment.commitOffset', async (t) => {
-        const { testAssignment, testProcessor, admin, consumer, streams, stream } = setupAssignmentTests(t)
+        const { testAssignment, testProcessor } = setupAssignmentTests(t)
 
         await t.test('can commit an offset to broker while processing messages', async (t) => {
             const testMessages = Array(10).fill({}).map(() => ({
@@ -283,7 +283,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
     })
 
     await t.test('assignment.caughtUp', async (t) => {
-        const { testAssignment, testProcessor, admin, consumer, streams, stream } = setupAssignmentTests(t)
+        const { testAssignment, testProcessor } = setupAssignmentTests(t)
 
         await t.test('can query whether the assignment has caught up to the end of the log given an offset', async (t) => {
             const testMessages = Array(10).fill({}).map(() => ({
@@ -349,7 +349,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
     })
 
     await t.test('assignment.committed', async (t) => {
-        const { testAssignment, testProcessor, admin, consumer, streams, stream } = setupAssignmentTests(t)
+        const { testAssignment, testProcessor, admin, consumer, streams } = setupAssignmentTests(t)
 
         await t.test('can query the last committed offset for the consumer', async (t) => {
             const testMessages = Array(10).fill({}).map(() => ({
@@ -429,7 +429,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
     })
 
     await t.test('assignment.isEmpty', async (t) => {
-        const { testAssignment, testProcessor, admin, consumer, streams, stream } = setupAssignmentTests(t)
+        const { testAssignment, testProcessor } = setupAssignmentTests(t)
 
         await t.test('can query whether partition of assignment is empty', async (t) => {
             const testMessages = Array(10).fill({}).map(() => ({
@@ -473,7 +473,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
     })
 
     await t.test('assignment.watermarks', async (t) => {
-        const { testAssignment, testProcessor, admin, consumer, streams, stream } = setupAssignmentTests(t)
+        const { testAssignment, testProcessor } = setupAssignmentTests(t)
 
         await t.test('can query whether partition of assignment is empty', async (t) => {
             const testMessages = Array(15).fill({}).map(() => ({
