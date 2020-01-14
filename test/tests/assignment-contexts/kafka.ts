@@ -50,6 +50,8 @@ const setupAssignmentTests = (t, autoStart = true) => {
 
         contexts.push(context)
 
+        await context.start()
+
         return context
     }
 
@@ -61,9 +63,6 @@ const setupAssignmentTests = (t, autoStart = true) => {
         await admin.connect()
         await consumer.connect()
         await streams.start()
-        for (let context of contexts) {
-            await context.start()
-        }
     }
 
     t.beforeEach(async () => {
