@@ -22,7 +22,7 @@ export interface TopicPartitionStream extends Transform {
     topic: string
     partition: number
 
-    seek(offset : string | Long) : Promise<void>
+    seek(offset : string | Long) : void
 }
 
 class SeekOp {
@@ -77,7 +77,7 @@ class TPStream extends Transform implements TopicPartitionStream {
         }
     }
 
-    async seek(offset: string | Long) {
+    seek(offset: string | Long) {
         try {
             offset = Long.fromValue(offset)
         } catch (parseError) {
