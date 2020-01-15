@@ -271,7 +271,7 @@ Tap.test('TaskStreams', async (t) => {
             ], 'fetches and inject messages for faster partitions as slower partitions experience back-pressure')
         })
 
-        await t.test('will stop injecting messages when current batch has gone stale through a seek operation and continue from seeked offset', async (t) => {
+        await t.test('will stop injecting messages when current batch has gone stale through a rewinding seek operation and continue from seeked offset', async (t) => {
             const testMessages = Array(100)
                 .fill({})
                 .map(() => {
@@ -305,6 +305,46 @@ Tap.test('TaskStreams', async (t) => {
                 ...testMessages.slice(0, 30).map((msg, n) => `${n}`), 
                 ...testMessages.map((msg, n) => `${n}`)
             ]
+
+            t.equivalent(consumedOffsets, expectedOffsets)
+
+        })
+
+        await t.test('will stop injecting messages when current batch has gone stale through a forwarding seek operation and continue from seeked offset', async (t) => {
+            const testMessages = Array(100)
+                .fill({})
+                .map(() => {
+                    const value = secureRandom()
+                    return { key: `key-${value}`, value: `value-${value}`, partition: 0 }
+                })
+
+            await produceMessages(testTopic, testMessages)
+
+            await consumer.connect()
+            await consumer.subscribe({ topic: testTopic, fromBeginning: true })
+            await streams.start()
+
+            var messageCount = 0
+
+            const stream: TopicPartitionStream = streams.stream({ topic: testTopic, partition: 0 })
+
+            const expectedOffsets = [
+                ...testMessages.slice(0,30).map((msg, n) => `${n}`),
+                ...testMessages.slice(50).map((msg, n) => `${50+n}`),
+            ]
+
+            const consumedMessages: any[] = await H(stream)
+                .tap((message: Message) => {
+                    messageCount++
+                    if (messageCount === 30) {
+                        stream.seek('50')
+                    }
+                })
+                .take(expectedOffsets.length)
+                .collect()
+                .toPromise(Promise)
+
+            const consumedOffsets = consumedMessages.map((message) => message.offset)
 
             t.equivalent(consumedOffsets, expectedOffsets)
 
