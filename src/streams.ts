@@ -2,6 +2,8 @@ import { Consumer, IHeaders } from 'kafkajs/types'
 import H from 'highland'
 import { Transform, TransformOptions } from 'stream'
 import { EventEmitter } from 'events'
+import Long from 'long'
+import Invariant from 'invariant'
 
 export interface Message {
     topic: string
@@ -19,27 +21,82 @@ export interface Message {
 export interface TopicPartitionStream extends Transform {
     topic: string
     partition: number
+
+    seek(offset : string | Long) : Promise<void>
+}
+
+class SeekOp {
+    id: number
+    offset: string
+
+    constructor({ id, offset }) {
+        this.id = id
+        this.offset = offset
+    }
 }
 
 class TPStream extends Transform implements TopicPartitionStream {
     topic: string
     partition: number
+    consumer: Consumer
+
+    private seekOpIdSeq: number
+    private observedOpId: number
     
-    constructor({ topic, partition } : { topic: string, partition: number }, streamOptions : TransformOptions = {}) {
+    constructor({ topic, partition, consumer } : { topic: string, partition: number, consumer: Consumer }, streamOptions : TransformOptions = {}) {
         super({
             ...streamOptions,
             objectMode: true,
-            highWaterMark: 8,
+            readableHighWaterMark: 0,
+            writableHighWaterMark: 8,
             emitClose: true,
             autoDestroy: true
         })
     
         this.topic = topic
         this.partition = partition
+        this.consumer = consumer
+
+        this.seekOpIdSeq = -1
+        this.observedOpId = -1
     }
 
-    _transform(message : Message, encoding, callback) {
-        callback(null, message)
+    _transform(messageOrOp : Message | SeekOp, encoding, callback) {
+        if (this.seekOpIdSeq !== this.observedOpId) {
+            // there's a pending seek operation to be completed
+            if (messageOrOp instanceof SeekOp) {
+                let op = messageOrOp
+                this.observedOpId = op.id
+            }
+
+            return callback()
+        } else {
+            let message = messageOrOp
+            
+            callback(null, message)
+        }
+    }
+
+    async seek(offset: string | Long) {
+        try {
+            offset = Long.fromValue(offset)
+        } catch (parseError) {
+            Invariant(!parseError, 'Valid offset (parseable as Long) is required to seek stream to offset')
+        }
+
+        const { topic, partition } = this
+
+        const operation = new SeekOp({
+            id: ++this.seekOpIdSeq,
+            offset: offset.toString()
+        })
+
+        this.consumer.seek({
+            topic,
+            partition,
+            offset: offset.toString()
+        })
+        this.write(operation)
     }
 }
 
@@ -64,7 +121,7 @@ class TaskStreams {
             .find((topparStream) => topparStream.topic === topic && topparStream.partition === partition)    
 
         if (!stream) {
-            let newStream : TopicPartitionStream = new TPStream({ topic, partition})
+            let newStream : TopicPartitionStream = new TPStream({ topic, partition, consumer })
             
             let onConsumerStop = () => newStream.end()
             let onStreamClose = () => {
@@ -94,6 +151,7 @@ class TaskStreams {
         const pauseConsumption = async ({ topic, partition } : { topic: string, partition: number }) => {
             const stream = this.stream({ topic, partition })
             // let isDrained = Symbol('drained')
+
 
             let onDrain
             let draining = new Promise((resolve, reject) => {
@@ -133,7 +191,7 @@ class TaskStreams {
                 const stream = this.stream({ topic: batch.topic, partition: batch.partition })
                 
                 for (let message of batch.messages) {
-                    if (!isRunning() || stream.writableEnded) break
+                    if (!isRunning() || stream.writableEnded || isStale()) break
 
                     const more = stream.write({
                         topic: batch.topic,

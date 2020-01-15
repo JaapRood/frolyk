@@ -29,7 +29,7 @@
   "dependencies": {
     "@types/highland": "^2.12.3",
     "@types/long": "^4.0.0",
-    "@types/node": "^12.6.8",
+    "@types/node": "^12.12.24",
     "highland": "^2.13.5",
     "invariant": "^2.2.4",
     "kafkajs": "^1.12.0-beta.11",
