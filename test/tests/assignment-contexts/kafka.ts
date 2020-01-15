@@ -18,6 +18,7 @@ import {
     produceMessages
 } from '../../helpers'
 import { start } from 'repl'
+import { SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION } from 'constants'
 
 const setupAssignmentTests = (t, autoStart = true) => {
     let testAssignment, admin, consumer, streams, contexts, topics
@@ -498,6 +499,49 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                 processResults,
                 testMessages.map(() => false)
                 , 'returns false when partitions contains messages')
+        })
+    })
+
+    await t.test('assignment.seek', async (t) => {
+        const { testAssignment, testProcessor } = setupAssignmentTests(t)
+
+        await t.test('will cause next message to be consumed to from sought to offst', async (t) => {
+            const testMessages = Array(100).fill({}).map(() => ({
+                value: `value-${secureRandom()}`,
+                key: `value-${secureRandom()}`,
+                partition: 0
+            }))
+
+            const expectedOffsets = [
+                ...testMessages.slice(50, 80).map((msg, n) => `${n+50}`),
+                ...testMessages.slice(20).map((msg, n) => `${n + 20}`)
+            ]
+
+            const context = await testProcessor([
+                async (assignment) => {
+                    assignment.seek('50')
+
+                    var messagesConsumed = 0
+
+                    return async (message) => {
+                        messagesConsumed++
+                        if (messagesConsumed === 30) {
+                            assignment.seek('20')
+                        }
+
+                        return message.offset
+                    }
+                }
+            ])
+
+            await produceMessages(testAssignment().topic, testMessages)
+
+            const processingResults = await context.stream
+                .take(expectedOffsets.length)
+                .collect()
+                .toPromise(Promise)
+
+            t.equivalent(processingResults, expectedOffsets)
         })
     })
 

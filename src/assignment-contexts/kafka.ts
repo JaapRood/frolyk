@@ -92,9 +92,10 @@ export default async function createContext ({
 
         /* istanbul ignore next */
         async log() {},
-        /* istanbul ignore next */
-        async seek() {},
         
+        seek(offset: string | Long) : void {
+            return rawStream.seek(offset)
+        },
 
         async send(messages: NewMessage | NewMessage[]): Promise<ProducedMessageMetadata[]> {
             if (!Array.isArray(messages)) messages = [messages]
