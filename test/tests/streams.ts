@@ -347,7 +347,27 @@ Tap.test('TaskStreams', async (t) => {
             const consumedOffsets = consumedMessages.map((message) => message.offset)
 
             t.equivalent(consumedOffsets, expectedOffsets)
+        })
+    })
 
+    await t.test('stream.seek', async (t) => {
+        let consumer, streams, testTopic
+        t.beforeEach(async () => {
+            consumer = createConsumer()
+            streams = createStreams(consumer)
+            testTopic = `topic-${secureRandom()}`
+            await createTopic({ topic: testTopic, partitions: 2 })
+        })
+
+        t.afterEach(async () => {
+            if (consumer) consumer.disconnect()
+            if (testTopic) await deleteTopic(testTopic)
+        })
+
+        await t.test('requires valid string offsets (parseable as Long)', async (t) => {
+            const stream: TopicPartitionStream = streams.stream({ topic: testTopic, partition: 0 })
+
+            await t.rejects(stream.seek('not-a-valid-offset'), /Valid offset/)
         })
     })
 })
