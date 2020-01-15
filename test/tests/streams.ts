@@ -88,7 +88,7 @@ Tap.test('TaskStreams', async (t) => {
             const pauseSpy = spy(consumer, 'pause')
             const resumeSpy = spy(consumer, 'resume')
             
-            const testMessages = Array(80)
+            const testMessages = Array(160)
                 .fill({})
                 .map(() => {
                     const value = secureRandom()

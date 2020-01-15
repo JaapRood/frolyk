@@ -48,7 +48,7 @@ class TPStream extends Transform implements TopicPartitionStream {
             ...streamOptions,
             objectMode: true,
             readableHighWaterMark: 0,
-            writableHighWaterMark: 8,
+            writableHighWaterMark: 16,
             emitClose: true,
             autoDestroy: true
         })
