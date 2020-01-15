@@ -290,6 +290,7 @@ Tap.test('TaskStreams', async (t) => {
             const stream : TopicPartitionStream = streams.stream({ topic: testTopic, partition: 0 })
 
             const consumedMessages : any[] = await H(stream)
+                .ratelimit(1, 10)
                 .tap((message : Message) => {
                     messageCount++
                     if (messageCount === 30) {
