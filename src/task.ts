@@ -150,12 +150,13 @@ class Task {
 	}
 
 	async stop() {
-		const { consumer, events } = this
+		const { admin, consumer, events, streams } = this
 
-		if (consumer) {
-			await consumer.disconnect()
-		}
-		// TODO: add teardown of processing pipeline
+		await this.stopAssignedContexts()
+
+		if (consumer) await consumer.disconnect()
+		if (admin) await admin.disconnect()
+
 		events.emit('stop')
 	}
 
@@ -181,14 +182,8 @@ class Task {
 		}
 
 		const { admin, consumer, kafka, streams } = this
-		const currentContexts = this.assignedContexts
-
-		await Promise.all(currentContexts.map(async (context) => {
-			const { topic, partition } = context
-			const stream = streams.stream({ topic, partition })
-			await context.stop()
-			stream.end()
-		}))
+		
+		await this.stopAssignedContexts()
 
 		if (this.processingSession) {
 			this.events.emit('session-stop')
@@ -241,6 +236,17 @@ class Task {
 		this.processingSession.catch((err) => {
 			this.events.emit('error', err)
 		})
+	}
+
+	private async stopAssignedContexts () {
+		const { assignedContexts, streams } = this
+
+		await Promise.all(assignedContexts.map(async (context) => {
+			const { topic, partition } = context
+			const stream = streams.stream({ topic, partition })
+			await context.stop()
+			stream.end()
+		}))
 	}
 
 }
