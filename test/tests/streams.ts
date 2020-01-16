@@ -368,7 +368,9 @@ Tap.test('TaskStreams', async (t) => {
         await t.test('requires valid string offsets (parseable as Long)', async (t) => {
             const stream: TopicPartitionStream = streams.stream({ topic: testTopic, partition: 0 })
 
-            await t.rejects(stream.seek('not-a-valid-offset'), /Valid offset/)
+            await t.rejects(async function () {
+                await stream.seek('not-a-valid-offset')
+            }, /Valid offset/)
         })
     })
 })
