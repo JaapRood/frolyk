@@ -27,21 +27,21 @@
   },
   "license": "ISC",
   "dependencies": {
-    "@types/highland": "^2.12.3",
-    "@types/long": "^4.0.0",
-    "@types/node": "^12.12.24",
     "highland": "^2.13.5",
     "invariant": "^2.2.4",
     "kafkajs": "^1.12.0-beta.11",
     "lodash.flatmap": "^4.5.0",
     "lodash.groupby": "^4.6.0",
     "long": "^4.0.0",
-    "tap": "^14.10.5",
-    "typescript": "^3.5.3",
     "uuid": "^3.3.3"
   },
   "devDependencies": {
+    "@types/highland": "^2.12.3",
+    "@types/long": "^4.0.0",
+    "@types/node": "^12.12.24",
     "@types/sinon": "^7.0.13",
-    "sinon": "^7.4.1"
+    "sinon": "^7.4.1",
+    "tap": "^14.10.5",
+    "typescript": "^3.5.3"
   }
 }
