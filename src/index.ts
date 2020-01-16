@@ -1,4 +1,1 @@
-
-export default function() {
-	return true
-}
+export { default as Task } from './task'
