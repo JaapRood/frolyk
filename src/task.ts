@@ -4,6 +4,7 @@ import createLocalAssignmentContext, { AssignmentTestInterface } from './assignm
 import createKafkaAssignmentContext from './assignment-contexts/kafka'
 import { Kafka, logLevel as LOG_LEVELS } from 'kafkajs'
 import createStreams, { Message } from './streams'
+import { LogicalOffset, LogicalLiteralOffset, isEarliest } from './offsets'
 import H from 'highland'
 import _flatMap from 'lodash.flatmap'
 import Uuid from 'uuid/v4'
@@ -48,7 +49,12 @@ class Task {
 		this.reassigning = Promise.resolve()
 	}
 
-	source(topicName) : Source {
+	source(topicName, options : { offsetReset?: LogicalLiteralOffset | LogicalOffset } = {}) : Source {
+		const { offsetReset } = {
+			offsetReset: LogicalOffset.Latest,
+			...options
+		}
+		
 		const existingSource = this.sources.find(({ topicName: t }) => {
 			return t === topicName
 		})
@@ -57,7 +63,8 @@ class Task {
 
 		const newSource : Source =  {
 			topicName,
-			processors: []
+			processors: [],
+			offsetReset
 		}
 
 		this.sources.push(newSource)
