@@ -18,23 +18,27 @@ class Task {
 	sources: Array<Source>
 	group: string
 	options: {
+		admin?: any,
 		connection?: any,
 		consumer?: any
 	}
 
+	admin?: any
 	consumer?: any
+	kafka?: any
 	private streams?: any
 	reassigning: Promise<void>
 	assignedContexts: any[]
 	processingSession?: Promise<any>
 	private sessionSeq: number
 
-	constructor({ group, connection, consumer } : { group: string, connection?: any, consumer?: any }) {
+	constructor({ group, connection, consumer, admin } : { group: string, connection?: any, consumer?: any, admin?: any }) {
 		this.id = idSeq++
 		this.events = new EventEmitter()
 		this.sources = []
 		this.group = group
 		this.options = {
+			admin,
 			connection,
 			consumer
 		}
@@ -101,17 +105,19 @@ class Task {
 		const connectionConfig = this.options.connection
 
 		const clientId = `frolyk-${Uuid()}`
-		const kafka = new Kafka({
+		const kafka = this.kafka = new Kafka({
 			clientId,
 			...connectionConfig
 		})
 
 		const consumerConfig = this.options.consumer || {}
+		const adminConfig = this.options.admin || {}
 		
 		const consumer = this.consumer = kafka.consumer({
 			...consumerConfig,
 			groupId: `${this.group}`
 		})
+		const admin = this.admin = kafka.admin(adminConfig)
 		const streams = this.streams = createStreams(consumer)
 		const consumerEvents = new EventEmitter()
 		consumer.on(consumer.events.GROUP_JOIN, (...args) => consumerEvents.emit(consumer.events.GROUP_JOIN, ...args))
@@ -174,7 +180,7 @@ class Task {
 			return
 		}
 
-		const { consumer, streams } = this
+		const { admin, consumer, kafka, streams } = this
 		const currentContexts = this.assignedContexts
 
 		await Promise.all(currentContexts.map(async (context) => {
@@ -200,7 +206,14 @@ class Task {
 				const { processors } = source
 				const stream = streams.stream({ topic, partition })
 
-				return createKafkaAssignmentContext({ assignment, consumer, processors, stream })
+				return createKafkaAssignmentContext({ 
+					assignment, 
+					admin, 
+					consumer, 
+					createProducer: (...args) => kafka.producer(...args),
+					processors, 
+					stream 
+				})
 			})
 			.map((awaiting) => H(awaiting))
 			.mergeWithLimit(4) // setup 4 assignments at once
