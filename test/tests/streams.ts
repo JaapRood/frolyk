@@ -25,7 +25,7 @@ Tap.test('TaskStreams', async (t) => {
         })
 
         t.afterEach(async () => {
-            if (consumer) consumer.disconnect()
+            if (consumer) await consumer.disconnect()
         })
 
         await t.test('returns a stream', async (t) => {
@@ -54,7 +54,7 @@ Tap.test('TaskStreams', async (t) => {
         })
 
         t.afterEach(async () => {
-            if (consumer) consumer.disconnect()
+            if (consumer) await consumer.disconnect()
             if (testTopic) await deleteTopic(testTopic)
         })
 
@@ -361,7 +361,7 @@ Tap.test('TaskStreams', async (t) => {
         })
 
         t.afterEach(async () => {
-            if (consumer) consumer.disconnect()
+            if (consumer) await consumer.disconnect()
             if (testTopic) await deleteTopic(testTopic)
         })
 
