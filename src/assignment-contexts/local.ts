@@ -2,6 +2,7 @@ import H from 'highland'
 import Long from 'long'
 
 import { OffsetAndMetadata, Watermarks } from './index'
+import { LogicalOffset, LogicalLiteralOffset, isEarliest, isLatest } from '../offsets'
 
 export interface AssignmentTestInterface {
 	inject(payload: { topic: string, partition: number, value: any })
@@ -27,39 +28,6 @@ export interface Message {
 	key: Buffer | null,
 	offset: string
 }
-
-enum LogicalOffset {
-	Latest = -1,
-	Earliest = -2
-}
-
-enum LogicalLiteralOffset {
-	// latest
-	End = 'end',
-	Latest = 'latest',
-	Largest = 'largest',
-
-
-	// earliest
-	Beginning = 'beginning',
-	Earliest = 'earliest',
-	Smallest = 'smallest'
-}
-
-const earliestLogicalOffsets : any = [
-	LogicalOffset.Earliest,
-	LogicalLiteralOffset.Beginning,
-	LogicalLiteralOffset.Earliest,
-	LogicalLiteralOffset.Smallest
-]
-
-const latestLogicalOffsets : any = [
-	LogicalOffset.Latest,
-	LogicalLiteralOffset.End,
-	LogicalLiteralOffset.Latest,
-	LogicalLiteralOffset.Largest
-]
-
 
 const createContext = async function({
 	assignment,
@@ -176,8 +144,8 @@ const createContext = async function({
 
 		async seek(soughtOffset : string | Long | LogicalOffset | LogicalLiteralOffset) {
 			// resolve the requested offset to a message that has been injected
-			const absoluteOffset : Long = earliestLogicalOffsets.includes(soughtOffset) ? lowOffset() :
-				latestLogicalOffsets.includes(soughtOffset) ? highOffset() :
+			const absoluteOffset : Long = isEarliest(soughtOffset) ? lowOffset() :
+				isLatest(soughtOffset) ? highOffset() :
 				Long.fromValue(soughtOffset)
 			const closestIndex = injectedMessages.findIndex(({ offset }) => offset.gte(absoluteOffset))
 			const soughtIndex = closestIndex > -1 ? closestIndex : 
