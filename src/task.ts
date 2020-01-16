@@ -147,10 +147,8 @@ class Task {
 
 		await consumer.connect()
 
-		const topicNames = this.sources.map(({ topicName }) => topicName)
-		for (let topic of topicNames) {
-			// TODO: add handling of offset resets
-			await consumer.subscribe({ topic })
+		for (let { topicName: topic, offsetReset } of this.sources) {
+			await consumer.subscribe({ topic, fromBeginning: isEarliest(offsetReset) })
 		}
 
 		streams.start()

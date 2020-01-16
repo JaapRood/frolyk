@@ -153,9 +153,42 @@ Tap.test('Task', async (t) => {
 
 			await task.start()
 
-			// TODO: replace timeout by consuming log from the start
 			await new Promise((r) => setTimeout(r, 1500))
 			await produceMessages(testTopic, testMessages)
+
+			const processedMessages = await processingMessages
+				.take(testMessages.length).collect().toPromise(Promise)
+
+			t.ok(processorSetup.calledTwice, 'processor setup is called for each received assignment')
+			t.ok(task.processingSession, 'exposes a Promise that represents the session processing pipeline output')
+			t.ok(task.reassigning, 'exposes a Promise that represents the reassignment process')
+		})
+
+		await t.test('can consume a source from the beginning of the log', async (t) => {
+			const testMessages = Array(100).fill({}).map(() => ({
+				value: `value-${secureRandom()}`,
+				key: `value-${secureRandom()}`,
+				partition: 0
+			}))
+
+			const testSource = task.source(testTopic, { offsetReset: 'earliest' })
+
+			const processingMessages = H()
+			const messageProcessor = spy((message) => {
+				processingMessages.write(message)
+				return message
+			})
+			const processorSetup = spy((assignment) => {
+				t.equal(assignment.topic, testTopic, 'processor setup is called for topic subscribed to')
+				t.ok(assignment.partition === 0 || assignment.partition === 1, 'processor setup is called for partition subscribed to')
+				return messageProcessor
+			})
+
+			task.processor(testSource, processorSetup)
+
+			// produce messages before we start consuming, to prove our point
+			await produceMessages(testTopic, testMessages)
+			await task.start()
 
 			const processedMessages = await processingMessages
 				.take(testMessages.length).collect().toPromise(Promise)
