@@ -16,7 +16,7 @@ export interface AssignmentContext {
 	commitOffset(newOffset: string | Long, metadata: string | null): Promise<void>,
 	committed(): Promise<OffsetAndMetadata>,
 	isEmpty(): Promise<boolean>,
-	log(): any,
+	log(tags, payload): any,
 	seek(offset: string | Long): void,
 	send(messages: NewMessage | NewMessage[]): Promise<ProducedMessageMetadata[]>,
 	watermarks(): Promise<Watermarks>

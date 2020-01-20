@@ -91,7 +91,7 @@ export default async function createContext ({
         },
 
         /* istanbul ignore next */
-        async log() {},
+        async log(tags, payload) {},
         
         seek(offset) {
             return rawStream.seek(offset)

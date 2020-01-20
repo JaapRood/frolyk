@@ -1,7 +1,7 @@
 import H from 'highland'
 import Long from 'long'
 
-import { OffsetAndMetadata, Watermarks } from './index'
+import { AssignmentContext, OffsetAndMetadata, NewMessage, ProducedMessageMetadata, Watermarks } from './index'
 import { LogicalOffset, LogicalLiteralOffset, isEarliest, isLatest } from '../offsets'
 
 export interface AssignmentTestInterface {
@@ -18,7 +18,8 @@ interface InternalMessage {
 	partition: number,
 	value: Buffer | null,
 	key: Buffer | null,
-	offset: Long
+	offset: Long,
+	timestamp: string
 }
 
 export interface Message {
@@ -54,39 +55,44 @@ const createContext = async function({
 	const injectedMessages : InternalMessage[] = []
 	const producedMessages = []
 
-	const injectMessage = (payload : { 
-		topic: string, 
-		partition: number, 
-		value?: any, 
+	const createMessage = (payload: {
+		topic: string,
+		partition?: number,
+		value?: any,
 		key?: any,
-		offset?: string
-	}) : Message => {
+		offset?: string,
+		timestamp?: string
+	}): InternalMessage => {
 		const value = !payload.value ? null :
 			Buffer.isBuffer(payload.value) ? payload.value :
-			Buffer.from(JSON.stringify(payload.value))
+				Buffer.from(JSON.stringify(payload.value))
 
 		const key = !payload.key ? null :
 			Buffer.isBuffer(payload.key) ? payload.key :
-			Buffer.from(JSON.stringify(payload.key))
- 		
- 		const offset = payload.offset && Long.fromValue(payload.offset) || Long.fromNumber(producedOffset + 1)
-		
+				Buffer.from(JSON.stringify(payload.key))
+
+		const offset = payload.offset && Long.fromValue(payload.offset) || Long.fromNumber(producedOffset + 1)
+
 		if (offset.lte(producedOffset)) {
 			throw new Error('Offset of injected message must be at or higher than the current highwatermark')
 		}
 
 		producedOffset = offset.toNumber()
 
-		const internalMessage = {
+		return {
+			partition: 0,
+			timestamp: `${Date.now()}`,
 			...payload,
 			value,
 			key,
 			offset
 		}
+	}
 
-		injectedMessages.push(internalMessage)
+	const injectMessage = (message : InternalMessage) : Message => {
+		injectedMessages.push(message)
 
-		return writeMessageToStream(internalMessage)
+		return writeMessageToStream(message)
 	}
 
 	const writeMessageToStream = (internalMessage : InternalMessage) : Message => {
@@ -110,7 +116,7 @@ const createContext = async function({
 		return firstMessage ? firstMessage.offset : Long.fromNumber(initialState.lowOffset)
 	}
 
-	const context = {
+	const context: AssignmentContext= {
 		async caughtUp(offset) {
 			// TODO: deal with logical offsets
 			return Long.fromValue(offset).add(1) >= highOffset()
@@ -140,9 +146,9 @@ const createContext = async function({
 		},
 		
 		/* istanbul ignore next */
-		async log(tags, payload) {},
+		log(tags, payload) {},
 
-		async seek(soughtOffset : string | Long | LogicalOffset | LogicalLiteralOffset) {
+		seek(soughtOffset : string | Long | LogicalOffset | LogicalLiteralOffset) {
 			// resolve the requested offset to a message that has been injected
 			const absoluteOffset : Long = isEarliest(soughtOffset) ? lowOffset() :
 				isLatest(soughtOffset) ? highOffset() :
@@ -163,12 +169,22 @@ const createContext = async function({
 			}
 		},
 
-		async send(messages: Array<{ topic: string, partition: number, value: any}>) : Promise<void> {
-			messages.forEach((message) => {
+		async send(messages) {
+			if (!Array.isArray(messages)) messages = [messages]
+			
+			return messages.map(createMessage).map((message) => {
 				producedMessages.push(message)
 
 				if (message.topic === assignment.topic && message.partition === assignment.partition) {
 					injectMessage(message)
+				}
+
+				return {
+					topicName: message.topic,
+					partition: message.partition,
+					errorCode: 0,
+					offset: message.offset.toString(),
+					timestamp: message.timestamp
 				}
 			})
 		},
@@ -180,7 +196,6 @@ const createContext = async function({
 			}
 		},
 
-		stream,
 		topic: assignment.topic,
 		partition: assignment.partition,
 		// TODO: decide if we want to support prefixes
@@ -188,7 +203,7 @@ const createContext = async function({
 		group: assignment.group
 	}
 
-	const initialMessages = initialState.messages.map(injectMessage)
+	const initialMessages = initialState.messages.map(createMessage).map(injectMessage)
 
 	const controlledStream = stream.filter(({ offset }) => {
 		if (seekToOffset > -1) {
@@ -217,11 +232,14 @@ const createContext = async function({
 	})
 
 	return {
-		inject: injectMessage,
+		inject: (payload) => {
+			const internal = createMessage(payload)
+			return injectMessage(internal)
+		},
 		committedOffsets,
 		async caughtUp() {
 			await processedStream.observe()
-				.map(async () => context.caughtUp(consumedOffset))
+				.map(async () => context.caughtUp(`${consumedOffset}`))
 				.flatMap((awaiting) => H(awaiting))
 				.find((isCaughtUp) => isCaughtUp)
 				.toPromise(Promise)

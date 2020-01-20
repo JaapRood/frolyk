@@ -223,7 +223,14 @@ Tap.test('Injected AssignmentContext', async (t) => {
 		const producedMessages = testInterface.producedMessages
 
 		t.ok(processMessage.calledOnce, 'injects any messages sent to test assignment back into processor')
-		t.deepEqual(testMessages, producedMessages, 'messages can be sent in assignment setup')
+		t.deepEqual(
+			testMessages, 
+			producedMessages.map(({ topic, partition, value }) => ({ 
+				topic, 
+				partition, 
+				value: JSON.parse(value.toString()) 
+			}))
+		, 'messages can be sent in assignment setup')
 	})
 
 	await t.test('assignment.seek', async (t) => {
