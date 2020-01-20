@@ -190,27 +190,26 @@ const createContext = async function({
 
 	const initialMessages = initialState.messages.map(injectMessage)
 
+	const controlledStream = stream.filter(({ offset }) => {
+		if (seekToOffset > -1) {
+			return Long.fromValue(offset).equals(seekToOffset)
+		} else {
+			return true
+		}
+	}).map((message: Message) => {
+		consumedOffset = Long.fromValue(message.offset).toNumber()
+		seekToOffset = -1
+		return message
+	})
+
 	const processedStream = await processors.reduce(async (s, setupProcessor) => {
 		const stream = await s
 
 		const processMessage = await setupProcessor(context)
 
-
-		return stream
-			.filter(({ offset }) => {
-				if (seekToOffset > -1) {
-					return Long.fromValue(offset).equals(seekToOffset)
-				} else {
-					return true
-				}
-			})
-			.map(async (message) => {
-				consumedOffset = Long.fromValue(message.offset).toNumber()
-				seekToOffset = -1
-				return await processMessage(message)
-			})
+		return stream.map(async (message) => await processMessage(message))
 			.flatMap((awaitingProcessing) => H(awaitingProcessing))
-	}, Promise.resolve(stream))
+	}, Promise.resolve(controlledStream))
 
 	const processingResults = []
 	processedStream.each((result) => {
