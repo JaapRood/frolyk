@@ -1,4 +1,5 @@
 import Source from '../source'
+import Long from 'long'
 
 interface Assignment {
 	topic: string,
@@ -9,7 +10,16 @@ interface Assignment {
 export interface AssignmentContext {
 	topic: string,
 	partition: number,
-	group: string
+	group: string,
+
+	caughtUp(offset: string | Long): Promise<boolean>,
+	commitOffset(newOffset: string | Long, metadata: string | null): Promise<void>,
+	committed(): Promise<OffsetAndMetadata>,
+	isEmpty(): Promise<boolean>,
+	log(): any,
+	seek(offset: string | Long): void,
+	send(messages: NewMessage | NewMessage[]): Promise<ProducedMessageMetadata[]>,
+	watermarks(): Promise<Watermarks>
 }
 
 export interface OffsetAndMetadata {
