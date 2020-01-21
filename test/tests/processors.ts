@@ -123,8 +123,38 @@ Tap.test('Processor pipeline', async (t) => {
                 timestamp: injectedMessage.timestamp
             }
         , 'context contains functions returning the offset and timestamp of the message being consumed')
-
     })
 
-    await t.test('context.abandon')
+    await t.test('context.abandon', async (t) => {
+        const testMessages = Array(3).fill({}).map(() => ({
+            topic: testAssignment.topic,
+            partition: testAssignment.partition,
+            value: `value-${secureRandom()}`,
+            key: `value-${secureRandom()}`
+        }))
+
+        const processMessageOne = spy(({ offset }, context) => {
+            if (offset === '1') {
+                return context.abandon
+            } else {
+                return offset
+            }
+        })
+
+        const processMessageTwo = spy((offset) => {
+            return offset
+        })
+
+        const testContext = await testProcessor([ processMessageOne, processMessageTwo ])
+
+        const injectedMessages = testMessages.map(testContext.inject)
+        await testContext.caughtUp()
+
+        t.equal(testContext.processingResults.length, testMessages.length - 1)
+        t.equivalent(
+            testContext.processingResults,
+            [injectedMessages[0].offset, injectedMessages[2].offset]
+        )
+        t.ok(processMessageTwo.calledTwice, 'abandoned messages are not passed to downstream message processors')
+    })
 })

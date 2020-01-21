@@ -81,9 +81,10 @@ export async function createPipeline(
             }, Promise.resolve(message))
 
             processingMessage.then((result) => {
-                if (result === abandon) return
-                push(null, result)
                 processedOffsets.write(offset)
+                if (result !== abandon) {
+                    push(null, result)
+                }
                 next()
             }, (err) => {
                 push(err)
