@@ -3,6 +3,7 @@ import Long from 'long'
 
 import { AssignmentContext, OffsetAndMetadata, NewMessage, ProducedMessageMetadata, Watermarks } from './index'
 import { LogicalOffset, LogicalLiteralOffset, isEarliest, isLatest } from '../offsets'
+import { createPipeline } from '../processors'
 
 export interface AssignmentTestInterface {
 	inject(payload: { topic: string, partition: number, value: any })
@@ -116,7 +117,7 @@ const createContext = async function({
 		return firstMessage ? firstMessage.offset : Long.fromNumber(initialState.lowOffset)
 	}
 
-	const context: AssignmentContext= {
+	const assignmentContext: AssignmentContext= {
 		async caughtUp(offset) {
 			// TODO: deal with logical offsets
 			return Long.fromValue(offset).add(1) >= highOffset()
@@ -217,14 +218,8 @@ const createContext = async function({
 		return message
 	})
 
-	const processedStream = await processors.reduce(async (s, setupProcessor) => {
-		const stream = await s
-
-		const processMessage = await setupProcessor(context)
-
-		return stream.map(async (message) => await processMessage(message))
-			.flatMap((awaitingProcessing) => H(awaitingProcessing))
-	}, Promise.resolve(controlledStream))
+	const processingPipeline = await createPipeline(assignmentContext, processors)
+	const processedStream = controlledStream.through(processingPipeline)
 
 	const processingResults = []
 	processedStream.each((result) => {
@@ -239,7 +234,7 @@ const createContext = async function({
 		committedOffsets,
 		async caughtUp() {
 			await processedStream.observe()
-				.map(async () => context.caughtUp(`${consumedOffset}`))
+				.map(async () => assignmentContext.caughtUp(`${consumedOffset}`))
 				.flatMap((awaiting) => H(awaiting))
 				.find((isCaughtUp) => isCaughtUp)
 				.toPromise(Promise)
