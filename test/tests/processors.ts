@@ -158,6 +158,61 @@ Tap.test('Processor pipeline', async (t) => {
         t.ok(processMessageTwo.calledTwice, 'abandoned messages are not passed to downstream message processors')
     })
 
+    await t.test('context.commit', async (t) => {
+        const testMessages = [
+            {
+                topic: testAssignment.topic,
+                partition: testAssignment.partition,
+                value: 'a-test-value-a',
+                offset: '0'
+            },
+            {
+                topic: 'some-other-topic',
+                partition: testAssignment.partition,
+                value: 'a-test-value-b',
+                offset: '1',
+            },
+            {
+                topic: testAssignment.topic,
+                partition: testAssignment.partition,
+                value: 'a-test-value-c',
+                offset: '2'
+            }
+        ]
+
+        let testInterface = await testProcessor(async ({ offset }, context) => {
+            await context.commit()
+
+            return offset
+        }, testAssignment, {
+            messages: testMessages
+        })
+
+        await testInterface.caughtUp()
+
+        t.equivalent(testInterface.committedOffsets, [
+            { offset: '1', metadata: null },
+            { offset: '2', metadata: null },
+            { offset: '3', metadata: null }
+        ], 'commits offset of current message + 1')
+
+        testInterface = await testProcessor(async ({ offset }, context) => {
+            await context.commit(offset)
+
+            return offset
+        }, testAssignment, {
+            messages: testMessages
+        })
+
+        await testInterface.caughtUp()
+
+        t.equivalent(testInterface.committedOffsets, [
+            { offset: '1', metadata: '0' },
+            { offset: '2', metadata: '1' },
+            { offset: '3', metadata: '2' }
+        ], 'allows metadata to be committed with offset')
+    })
+
     await t.test('context.toString', async (t) => {
         const testMessage = {
             topic: testAssignment.topic,

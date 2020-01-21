@@ -1,6 +1,7 @@
 import H from 'highland'
 import { AssignmentContext } from './assignment-contexts/index'
 import { Message } from './streams'
+import Long from 'long'
 
 const abandon = Symbol('abandon')
 
@@ -63,7 +64,7 @@ export async function createPipeline(
             const context = {
                 abandon,
                 toString: () => `processor context (o=${offset} p=${partition} t=${topic}, ho=${highWaterOffset})`,
-                commit: (metadata) => assignmentContext.commitOffset(offset, metadata),
+                commit: (metadata) => assignmentContext.commitOffset(Long.fromValue(offset).add(1), metadata),
                 group: () => assignmentContext.group,
                 offset: () => offset,
                 partition: () => partition,
