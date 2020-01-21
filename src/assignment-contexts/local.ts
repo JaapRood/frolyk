@@ -4,6 +4,7 @@ import Long from 'long'
 import { AssignmentContext, OffsetAndMetadata, NewMessage, ProducedMessageMetadata, Watermarks } from './index'
 import { LogicalOffset, LogicalLiteralOffset, isEarliest, isLatest } from '../offsets'
 import { createPipeline } from '../processors'
+import { Message } from '../streams'
 
 export interface AssignmentTestInterface {
 	inject(payload: { topic: string, partition: number, value: any })
@@ -21,14 +22,6 @@ interface InternalMessage {
 	key: Buffer | null,
 	offset: Long,
 	timestamp: string
-}
-
-export interface Message {
-	topic: string,
-	partition: number,
-	value: Buffer | null,
-	key: Buffer | null,
-	offset: string
 }
 
 const createContext = async function({
@@ -51,7 +44,7 @@ const createContext = async function({
 	let consumedOffset : number = initialState.lowOffset - 1
 	let seekToOffset : number = -1
 	let committedOffset : OffsetAndMetadata = { offset: '-1', metadata: null }
-	const stream : Highland.Stream<Message> = H()
+	const stream : Highland.Stream<InternalMessage> = H()
 	const committedOffsets : OffsetAndMetadata[] = []
 	const injectedMessages : InternalMessage[] = []
 	const producedMessages = []
@@ -90,17 +83,13 @@ const createContext = async function({
 		}
 	}
 
-	const injectMessage = (message : InternalMessage) : Message => {
+	const injectMessage = (message : InternalMessage) : InternalMessage => {
 		injectedMessages.push(message)
 
 		return writeMessageToStream(message)
 	}
 
-	const writeMessageToStream = (internalMessage : InternalMessage) : Message => {
-		const message = {
-			...internalMessage,
-			offset: internalMessage.offset.toString()
-		}
+	const writeMessageToStream = (message : InternalMessage) : InternalMessage => {
 
 		stream.write(message)
 
@@ -206,16 +195,20 @@ const createContext = async function({
 
 	const initialMessages = initialState.messages.map(createMessage).map(injectMessage)
 
-	const controlledStream = stream.filter(({ offset }) => {
+	const controlledStream : Highland.Stream<Message> = stream.filter(({ offset }) => {
 		if (seekToOffset > -1) {
 			return Long.fromValue(offset).equals(seekToOffset)
 		} else {
 			return true
 		}
-	}).map((message: Message) => {
+	}).map((message: InternalMessage) => {
 		consumedOffset = Long.fromValue(message.offset).toNumber()
 		seekToOffset = -1
-		return message
+		return {
+			...message,
+			offset: message.offset.toString(),
+			highWaterOffset: highOffset().toString()
+		}
 	})
 
 	const processingPipeline = await createPipeline(assignmentContext, processors)
@@ -227,9 +220,14 @@ const createContext = async function({
 	})
 
 	return {
-		inject: (payload) => {
+		inject: (payload) : Message => {
 			const internal = createMessage(payload)
-			return injectMessage(internal)
+			injectMessage(internal)
+			return {
+				...internal,
+				offset: internal.offset.toString(),
+				highWaterOffset: highOffset().toString()
+			}
 		},
 		committedOffsets,
 		async caughtUp() {
