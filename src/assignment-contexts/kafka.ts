@@ -6,6 +6,7 @@ import _groupBy from 'lodash.groupby'
 
 import { TopicPartitionStream, Message } from '../streams'
 import { AssignmentContext } from './index'
+import { createPipeline } from '../processors'
 
 export default async function createContext ({
     assignment,
@@ -46,7 +47,7 @@ export default async function createContext ({
         }
     }
 
-    const processorContext: AssignmentContext = {
+    const assignmentContext: AssignmentContext = {
         async caughtUp(offset) {
             var offsetLong : Long
             try {
@@ -132,14 +133,8 @@ export default async function createContext ({
         group: assignment.group
     }
 
-    const processedStream = await processors.reduce(async (s, setupProcessor) => {
-        const stream = await s
-
-        const messageProcessor = await setupProcessor(processorContext)
-
-        return stream.map(async (message) => await messageProcessor(message))
-            .flatMap((awaitingProcessing) => H(awaitingProcessing))
-    }, Promise.resolve(controlledStream))
+    const processingPipeline = await createPipeline(assignmentContext, processors)
+    const processedStream = controlledStream.through(processingPipeline)
 
     return {
         topic: assignment.topic,
