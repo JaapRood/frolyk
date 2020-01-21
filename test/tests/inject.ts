@@ -41,7 +41,9 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			t.type(injectedMessage.value, Buffer, 'injected message value is converted to a Buffer')
 			t.deepEqual(JSON.parse(injectedMessage.key.toString()), testMessage.key)
 			t.deepEqual(JSON.parse(injectedMessage.value.toString()), testMessage.value)
-
+			
+			await testInterface.caughtUp()
+			
 			t.ok(processMessage.calledWith(injectedMessage))
 		})
 
