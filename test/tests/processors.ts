@@ -157,4 +157,29 @@ Tap.test('Processor pipeline', async (t) => {
         )
         t.ok(processMessageTwo.calledTwice, 'abandoned messages are not passed to downstream message processors')
     })
+
+    await t.test('context.toString', async (t) => {
+        const testMessage = {
+            topic: testAssignment.topic,
+            partition: testAssignment.partition,
+            value: `value-${secureRandom()}`,
+            key: `value-${secureRandom()}`
+        }
+
+        const testContext = await testProcessor((message, context) => {
+            return `${context}`
+        })
+
+        const injectedMessage = testContext.inject(testMessage)
+        await testContext.caughtUp()
+
+        t.equal(testContext.processingResults.length, 1)
+        const result = testContext.processingResults[0]
+        t.type(result, 'string')
+        t.match(result, /processor context/, 'contains processor context in string')
+        t.match(result, `o=${injectedMessage.offset}`, 'contains message offset')
+        t.match(result, `t=${testAssignment.topic}`, 'contains assignment topic')
+        t.match(result, `p=${testAssignment.partition}`, 'contains assignment partition')
+        t.match(result, 'ho=1', 'contains high water offset')
+    })
 })
