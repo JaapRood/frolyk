@@ -61,7 +61,7 @@ export default async function createContext ({
             return watermarks.high.lt(1) || offsetLong.gte(watermarks.high)
         },
         
-        async commitOffset(newOffset, metadata) {
+        async commitOffset(newOffset, metadata = null) {
             try {
                 newOffset = Long.fromValue(newOffset)
             } catch (parseError) {
