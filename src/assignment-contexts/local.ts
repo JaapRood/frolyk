@@ -11,6 +11,7 @@ export interface AssignmentTestInterface {
 	committedOffsets: OffsetAndMetadata[],
 	initialMessages: Message[],
 	caughtUp() : Promise<void>,
+	processing: Promise<void>,
 	processingResults: any[],
 	processedOffsets: string[],
 	producedMessages: any[]
@@ -23,6 +24,15 @@ interface InternalMessage {
 	key: Buffer | null,
 	offset: Long,
 	timestamp: string
+}
+
+interface InjectMessagePayload {
+	topic: string,
+	partition?: number,
+	value?: any,
+	key?: any,
+	offset?: string,
+	timestamp?: string
 }
 
 const createContext = async function({
@@ -45,19 +55,12 @@ const createContext = async function({
 	let consumedOffset : number = initialState.lowOffset - 1
 	let seekToOffset : number = -1
 	let committedOffset : OffsetAndMetadata = { offset: '-1', metadata: null }
-	const stream : Highland.Stream<InternalMessage> = H()
+	const stream : Highland.Stream<InternalMessage | Error> = H()
 	const committedOffsets : OffsetAndMetadata[] = []
 	const injectedMessages : InternalMessage[] = []
 	const producedMessages = []
 
-	const createMessage = (payload: {
-		topic: string,
-		partition?: number,
-		value?: any,
-		key?: any,
-		offset?: string,
-		timestamp?: string
-	}): InternalMessage => {
+	const createMessage = (payload: InjectMessagePayload): InternalMessage => {
 		const value = !payload.value ? null :
 			Buffer.isBuffer(payload.value) ? payload.value :
 				Buffer.from(JSON.stringify(payload.value))
@@ -88,6 +91,10 @@ const createContext = async function({
 		injectedMessages.push(message)
 
 		return writeMessageToStream(message)
+	}
+
+	const injectError = (error: Error) => {
+		return stream.write(error)
 	}
 
 	const writeMessageToStream = (message : InternalMessage) : InternalMessage => {
@@ -196,7 +203,13 @@ const createContext = async function({
 
 	const initialMessages = initialState.messages.map(createMessage).map(injectMessage)
 
-	const controlledStream : Highland.Stream<Message> = stream.filter(({ offset }) => {
+	const controlledStream : Highland.Stream<Message> = stream.map((messageOrError) => {
+		if (messageOrError instanceof Error) {
+			throw (messageOrError as Error)
+		}
+
+		return messageOrError as InternalMessage
+	}).filter(({ offset }) => {
 		if (seekToOffset > -1) {
 			return Long.fromValue(offset).equals(seekToOffset)
 		} else {
@@ -216,24 +229,33 @@ const createContext = async function({
 	const processedStream = controlledStream.through(processingPipeline)
 
 	const processingResults = []
-	processedStream.each((result) => {
+	const processing = processedStream.tap((result) => {
 		processingResults.push(result)
-	})
+	}).last().toPromise(Promise)
 	const processedOffsets = []
 	offsetsStream.each((offset) => {
 		processedOffsets.push(offset)
 	})
 
-	return {
-		inject: (payload) : Message => {
-			const internal = createMessage(payload)
+	function inject(payload: InjectMessagePayload) : Message
+	function inject(payload: Error): Error
+	function inject(payload: any) : any {
+		if (payload instanceof Error) {
+			injectError(payload)
+			return payload
+		} else {
+			let internal = createMessage(payload)
 			injectMessage(internal)
 			return {
 				...internal,
 				offset: internal.offset.toString(),
 				highWaterOffset: highOffset().toString()
 			}
-		},
+		}
+	}
+
+	return {
+		inject,
 		committedOffsets,
 		async caughtUp() {
 			await offsetsStream.observe()
@@ -243,6 +265,7 @@ const createContext = async function({
 				.toPromise(Promise)
 		},
 		initialMessages,
+		processing,
 		processingResults,
 		processedOffsets,
 		producedMessages

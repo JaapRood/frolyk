@@ -106,6 +106,15 @@ Tap.test('Injected AssignmentContext', async (t) => {
 
 
 		})
+
+		await t.test('can inject error', async () => {
+			const testError = new Error('error-to-test-handling')
+			testInterface.inject(testError)
+
+			t.rejects(async () => {
+				await testInterface.processing
+			}, 'error-to-test-handling', 'injected errors are propagated through the processing pipeline')
+		})
 	})
 
 
