@@ -15,19 +15,24 @@ interface ProcessorFunction {
 }
 
 export async function createPipeline(
-    controlledStream: Highland.Stream<Message>,
     assignmentContext : AssignmentContext, 
     processors : ProcessorSetup[]
-) : Promise<Highland.Stream<any>> {
-    const processedStream = await processors.reduce(async (s, setupProcessor) => {
-        const stream : Highland.Stream<any> = await s
-        
+): Promise<(controlledStream: Highland.Stream<Message>) => Highland.Stream<any>> {
+    const messageProcessors = await processors.reduce(async (p, setupProcessor) => {
+        const processors = await p
+
         const messageProcessor = await setupProcessor(assignmentContext)
 
-        return stream
-            .map(async (message) => await messageProcessor(message, {}))
-            .flatMap((awaitingProcessing) => H(awaitingProcessing))
-    }, Promise.resolve(controlledStream))
+        return [...processors, messageProcessor]
+    }, Promise.resolve([]))
+    
+    return (controlledStream) => {    
+        const processedStream = messageProcessors.reduce((stream, messageProcessor) => {
+            return stream
+                .map(async (message) => await messageProcessor(message, {}))
+                .flatMap((awaitingProcessing) => H(awaitingProcessing))
+        }, controlledStream)
 
-    return processedStream
+        return processedStream
+    }
 }
