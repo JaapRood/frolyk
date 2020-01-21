@@ -215,7 +215,9 @@ Tap.test('Injected AssignmentContext', async (t) => {
 		]
 
 		const testInterface = await testProcessor(async (assignment) => {
-			await assignment.send(testMessages)
+			const [firstMessage, ...otherMessages] = testMessages
+			await assignment.send(firstMessage)
+			await assignment.send(otherMessages)
 
 			return processMessage
 		})
