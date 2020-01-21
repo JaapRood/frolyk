@@ -9,7 +9,7 @@ interface ProcessorSetup {
     (assignment: any) : ProcessorFunction[]
 }
 
-interface ProcessingContext {
+export interface ProcessingContext {
     abandon,
     toString: () => string,
     commit: (metadata: any) => Promise<void>,
