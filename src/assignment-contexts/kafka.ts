@@ -133,8 +133,13 @@ export default async function createContext ({
         group: assignment.group
     }
 
-    const processingPipeline = await createPipeline(assignmentContext, processors)
+    const [processingPipeline, processedOffsets] = await createPipeline(assignmentContext, processors)
     const processedStream = controlledStream.through(processingPipeline)
+
+    processedOffsets.each((offset) => {
+        // this stream is mostly used for testing, so here we'll just want to make sure it doesn't
+        // become a memory leak by instantly relieving all back-pressure
+    })
 
     return {
         topic: assignment.topic,

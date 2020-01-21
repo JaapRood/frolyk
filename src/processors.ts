@@ -29,7 +29,10 @@ interface ProcessorFunction {
 export async function createPipeline(
     assignmentContext : AssignmentContext, 
     processors : ProcessorSetup[]
-): Promise<(controlledStream: Highland.Stream<Message>) => Highland.Stream<any>> {
+): Promise<[
+    (controlledStream: Highland.Stream<Message>) => Highland.Stream<any>,
+    Highland.Stream<string>
+]> {
     const messageProcessors : ProcessorFunction[] = await processors.reduce(async (p, setupProcessor) => {
         const processors = await p
 
@@ -38,7 +41,9 @@ export async function createPipeline(
         return [...processors, messageProcessor]
     }, Promise.resolve([]))
     
-    return (controlledStream) => {    
+    const processedOffsets : Highland.Stream<string> = H()
+
+    const pipeline = (controlledStream) => {    
         const processedStream = controlledStream.consume(function (err, x, push, next) {
             if (err) {
                 // forward errors
@@ -47,6 +52,7 @@ export async function createPipeline(
                 return
             } else if (H.isNil(x)) {
                 // forward end of stream
+                processedOffsets.end()
                 push(null, x)
                 return 
             }
@@ -77,6 +83,7 @@ export async function createPipeline(
             processingMessage.then((result) => {
                 if (result === abandon) return
                 push(null, result)
+                processedOffsets.write(offset)
                 next()
             }, (err) => {
                 push(err)
@@ -86,4 +93,6 @@ export async function createPipeline(
 
         return processedStream
     }
+
+    return [pipeline, processedOffsets]
 }

@@ -12,6 +12,7 @@ export interface AssignmentTestInterface {
 	initialMessages: Message[],
 	caughtUp() : Promise<void>,
 	processingResults: any[],
+	processedOffsets: string[],
 	producedMessages: any[]
 }
 
@@ -211,12 +212,16 @@ const createContext = async function({
 		}
 	})
 
-	const processingPipeline = await createPipeline(assignmentContext, processors)
+	const [processingPipeline, offsetsStream] = await createPipeline(assignmentContext, processors)
 	const processedStream = controlledStream.through(processingPipeline)
 
 	const processingResults = []
 	processedStream.each((result) => {
 		processingResults.push(result)
+	})
+	const processedOffsets = []
+	offsetsStream.each((offset) => {
+		processedOffsets.push(offset)
 	})
 
 	return {
@@ -231,14 +236,15 @@ const createContext = async function({
 		},
 		committedOffsets,
 		async caughtUp() {
-			await processedStream.observe()
-				.map(async () => assignmentContext.caughtUp(`${consumedOffset}`))
+			await offsetsStream.observe()
+				.map(async (offset) => assignmentContext.caughtUp(`${offset}`))
 				.flatMap((awaiting) => H(awaiting))
 				.find((isCaughtUp) => isCaughtUp)
 				.toPromise(Promise)
 		},
 		initialMessages,
 		processingResults,
+		processedOffsets,
 		producedMessages
 	}
 }
