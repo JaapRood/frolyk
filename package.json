@@ -8,7 +8,7 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "prepare": "npm run build",
     "watch": "tsc -w",
     "test": "tap --100 --files ./test/tests",
