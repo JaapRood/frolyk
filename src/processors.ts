@@ -65,6 +65,10 @@ export async function createPipeline(
                 abandon,
                 toString: () => `processor context (o=${offset} p=${partition} t=${topic}, ho=${highWaterOffset})`,
                 commit: (metadata) => assignmentContext.commitOffset(Long.fromValue(offset).add(1), metadata),
+                /* istanbul ignore next */
+                log(tags, payload) {
+                    return assignmentContext.log(tags, payload)
+                },
                 group: () => assignmentContext.group,
                 offset: () => offset,
                 partition: () => partition,
