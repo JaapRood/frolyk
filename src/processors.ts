@@ -6,8 +6,7 @@ import Long from 'long'
 const abandon = Symbol('abandon')
 
 interface ProcessorSetup {
-    (assignment: any) : ProcessorFunction
-    (assignment: any) : ProcessorFunction[]
+    (assignment: any) : ProcessorFunction | ProcessorFunction[]
 }
 
 export interface ProcessingContext {
@@ -37,9 +36,11 @@ export async function createPipeline(
     const messageProcessors : ProcessorFunction[] = await processors.reduce(async (p, setupProcessor) => {
         const processors = await p
 
-        const messageProcessor = await setupProcessor(assignmentContext)
+        const setupResult = await setupProcessor(assignmentContext)
+        
+        const newProcessors : ProcessorFunction[] = Array.isArray(setupResult) ? setupResult : [setupResult]
 
-        return [...processors, messageProcessor]
+        return [...processors, ...newProcessors]
     }, Promise.resolve([]))
     
     const processedOffsets : Highland.Stream<string> = H()

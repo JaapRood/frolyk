@@ -12,12 +12,11 @@ Tap.test('Processor pipeline', async (t) => {
         group: 'test-group'
     }
 
-    async function testProcessor (processors, assignment = testAssignment, initialState = {}) {
-        processors = [].concat(processors) // one or more processors
+    async function testProcessor (messageProcessors, assignment = testAssignment, initialState = {}) {
         
         return await createLocalAssignmentContext({
             assignment,
-            processors: processors.map((processor) => async (assignment) => processor),
+            processors: [async (assignment) => messageProcessors],
             initialState
         })
     }
