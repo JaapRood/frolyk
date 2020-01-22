@@ -521,14 +521,14 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
 
             const context = await testProcessor([
                 async (assignment) => {
-                    assignment.seek('50')
+                    await assignment.seek('50')
 
                     var messagesConsumed = 0
 
                     return async (message) => {
                         messagesConsumed++
                         if (messagesConsumed === 30) {
-                            assignment.seek('20')
+                            await assignment.seek('20')
                         }
 
                         return message.offset
