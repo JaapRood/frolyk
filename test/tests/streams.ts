@@ -372,56 +372,6 @@ Tap.test('TaskStreams', async (t) => {
                 await stream.seek('not-a-valid-offset')
             }, /Valid offset/)
         })
-
-        await t.test('can seek to the beginning of a partition', async (t) => {
-            const testMessages = Array(50)
-                .fill({})
-                .map(() => {
-                    const value = secureRandom()
-                    return { key: `key-${value}`, value: `value-${value}`, partition: 0 }
-                })
-
-            await produceMessages(testTopic, testMessages)
-
-            await consumer.connect()
-            await consumer.subscribe({ topic: testTopic, fromBeginning: true })
-            await streams.start()
-
-            var messageCount = 0
-
-            const stream: TopicPartitionStream = streams.stream({ topic: testTopic, partition: 0 })
-
-            const consumedMessages: any[] = await H(stream)
-                .ratelimit(1, 10)
-                .tap((message: Message) => {
-                    messageCount++
-                    if (messageCount === 30) {
-                        stream.seek('beginning')
-                    }
-
-                    if (messageCount === 60) {
-                        stream.seek('earliest')
-                    }
-
-                    if (messageCount === 90) {
-                        stream.seek('smallest')
-                    }
-                })
-                .take(testMessages.length + 30 * 3)
-                .collect()
-                .toPromise(Promise)
-
-            const consumedOffsets = consumedMessages.map((message) => message.offset)
-            const expectedOffsets = [
-                ...testMessages.slice(0, 30).map((msg, n) => `${n}`),
-                ...testMessages.slice(0, 30).map((msg, n) => `${n}`),
-                ...testMessages.slice(0, 30).map((msg, n) => `${n}`),
-                ...testMessages.map((msg, n) => `${n}`)
-            ]
-
-            t.equivalent(consumedOffsets, expectedOffsets)
-
-        })
     })
 })
 
