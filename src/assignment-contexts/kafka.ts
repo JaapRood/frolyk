@@ -5,7 +5,8 @@ import Invariant from 'invariant'
 import _groupBy from 'lodash.groupby'
 
 import { TopicPartitionStream, Message } from '../streams'
-import { OffsetAndMetadata, Watermarks, NewMessage, ProducedMessageMetadata } from './index'
+import { AssignmentContext } from './index'
+import { createPipeline } from '../processors'
 
 export default async function createContext ({
     assignment,
@@ -46,8 +47,8 @@ export default async function createContext ({
         }
     }
 
-    const processorContext = {
-        async caughtUp(offset: string | Long) : Promise<boolean> {
+    const assignmentContext: AssignmentContext = {
+        async caughtUp(offset) {
             var offsetLong : Long
             try {
                 offsetLong = Long.fromValue(offset)
@@ -60,7 +61,7 @@ export default async function createContext ({
             return watermarks.high.lt(1) || offsetLong.gte(watermarks.high)
         },
         
-        async commitOffset(newOffset: string | Long, metadata: string | null = null) : Promise<void> {
+        async commitOffset(newOffset, metadata = null) {
             try {
                 newOffset = Long.fromValue(newOffset)
             } catch (parseError) {
@@ -75,7 +76,7 @@ export default async function createContext ({
             }])
         },
         
-        async committed(): Promise<OffsetAndMetadata> {
+        async committed() {
             const payload = { groupId: assignment.group, topic: assignment.topic }
 
             const partitionOffsets = await admin.fetchOffsets(payload)
@@ -84,20 +85,20 @@ export default async function createContext ({
             return { offset, metadata }
         },
         
-        async isEmpty() : Promise<boolean> {
+        async isEmpty() {
             const watermarks = await fetchWatermarks()
 
             return watermarks.high.subtract(watermarks.low).lte(0)
         },
 
         /* istanbul ignore next */
-        async log() {},
+        async log(tags, payload) {},
         
-        seek(offset: string | Long) : void {
+        seek(offset) {
             return rawStream.seek(offset)
         },
 
-        async send(messages: NewMessage | NewMessage[]): Promise<ProducedMessageMetadata[]> {
+        async send(messages) {
             if (!Array.isArray(messages)) messages = [messages]
             const messagesByTopic = _groupBy(messages, (message) => message.topic)
             const topics = Object.keys(messagesByTopic)
@@ -118,7 +119,7 @@ export default async function createContext ({
             })
         },
         /* istanbul ignore next */
-        async watermarks() : Promise<Watermarks> {
+        async watermarks() {
             const { high, low } = await fetchWatermarks()
             
             return {
@@ -132,14 +133,13 @@ export default async function createContext ({
         group: assignment.group
     }
 
-    const processedStream = await processors.reduce(async (s, setupProcessor) => {
-        const stream = await s
+    const [processingPipeline, processedOffsets] = await createPipeline(assignmentContext, processors)
+    const processedStream = controlledStream.through(processingPipeline)
 
-        const messageProcessor = await setupProcessor(processorContext)
-
-        return stream.map(async (message) => await messageProcessor(message))
-            .flatMap((awaitingProcessing) => H(awaitingProcessing))
-    }, Promise.resolve(controlledStream))
+    processedOffsets.each((offset) => {
+        // this stream is mostly used for testing, so here we'll just want to make sure it doesn't
+        // become a memory leak by instantly relieving all back-pressure
+    })
 
     return {
         topic: assignment.topic,

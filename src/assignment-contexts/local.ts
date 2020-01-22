@@ -1,15 +1,19 @@
 import H from 'highland'
 import Long from 'long'
 
-import { OffsetAndMetadata, Watermarks } from './index'
+import { AssignmentContext, OffsetAndMetadata, NewMessage, ProducedMessageMetadata, Watermarks } from './index'
 import { LogicalOffset, LogicalLiteralOffset, isEarliest, isLatest } from '../offsets'
+import { createPipeline } from '../processors'
+import { Message } from '../streams'
 
 export interface AssignmentTestInterface {
 	inject(payload: { topic: string, partition: number, value: any })
 	committedOffsets: OffsetAndMetadata[],
 	initialMessages: Message[],
 	caughtUp() : Promise<void>,
+	processing: Promise<void>,
 	processingResults: any[],
+	processedOffsets: string[],
 	producedMessages: any[]
 }
 
@@ -18,15 +22,17 @@ interface InternalMessage {
 	partition: number,
 	value: Buffer | null,
 	key: Buffer | null,
-	offset: Long
+	offset: Long,
+	timestamp: string
 }
 
-export interface Message {
+interface InjectMessagePayload {
 	topic: string,
-	partition: number,
-	value: Buffer | null,
-	key: Buffer | null,
-	offset: string
+	partition?: number,
+	value?: any,
+	key?: any,
+	offset?: string,
+	timestamp?: string
 }
 
 const createContext = async function({
@@ -49,51 +55,49 @@ const createContext = async function({
 	let consumedOffset : number = initialState.lowOffset - 1
 	let seekToOffset : number = -1
 	let committedOffset : OffsetAndMetadata = { offset: '-1', metadata: null }
-	const stream : Highland.Stream<Message> = H()
+	const stream : Highland.Stream<InternalMessage | Error> = H()
 	const committedOffsets : OffsetAndMetadata[] = []
 	const injectedMessages : InternalMessage[] = []
 	const producedMessages = []
 
-	const injectMessage = (payload : { 
-		topic: string, 
-		partition: number, 
-		value?: any, 
-		key?: any,
-		offset?: string
-	}) : Message => {
+	const createMessage = (payload: InjectMessagePayload): InternalMessage => {
 		const value = !payload.value ? null :
 			Buffer.isBuffer(payload.value) ? payload.value :
-			Buffer.from(JSON.stringify(payload.value))
+				Buffer.from(JSON.stringify(payload.value))
 
 		const key = !payload.key ? null :
 			Buffer.isBuffer(payload.key) ? payload.key :
-			Buffer.from(JSON.stringify(payload.key))
- 		
- 		const offset = payload.offset && Long.fromValue(payload.offset) || Long.fromNumber(producedOffset + 1)
-		
+				Buffer.from(JSON.stringify(payload.key))
+
+		const offset = payload.offset && Long.fromValue(payload.offset) || Long.fromNumber(producedOffset + 1)
+
 		if (offset.lte(producedOffset)) {
 			throw new Error('Offset of injected message must be at or higher than the current highwatermark')
 		}
 
 		producedOffset = offset.toNumber()
 
-		const internalMessage = {
+		return {
+			partition: 0,
+			timestamp: `${Date.now()}`,
 			...payload,
 			value,
 			key,
 			offset
 		}
-
-		injectedMessages.push(internalMessage)
-
-		return writeMessageToStream(internalMessage)
 	}
 
-	const writeMessageToStream = (internalMessage : InternalMessage) : Message => {
-		const message = {
-			...internalMessage,
-			offset: internalMessage.offset.toString()
-		}
+	const injectMessage = (message : InternalMessage) : InternalMessage => {
+		injectedMessages.push(message)
+
+		return writeMessageToStream(message)
+	}
+
+	const injectError = (error: Error) => {
+		return stream.write(error)
+	}
+
+	const writeMessageToStream = (message : InternalMessage) : InternalMessage => {
 
 		stream.write(message)
 
@@ -110,7 +114,7 @@ const createContext = async function({
 		return firstMessage ? firstMessage.offset : Long.fromNumber(initialState.lowOffset)
 	}
 
-	const context = {
+	const assignmentContext: AssignmentContext= {
 		async caughtUp(offset) {
 			// TODO: deal with logical offsets
 			return Long.fromValue(offset).add(1) >= highOffset()
@@ -140,9 +144,9 @@ const createContext = async function({
 		},
 		
 		/* istanbul ignore next */
-		async log(tags, payload) {},
+		log(tags, payload) {},
 
-		async seek(soughtOffset : string | Long | LogicalOffset | LogicalLiteralOffset) {
+		seek(soughtOffset : string | Long | LogicalOffset | LogicalLiteralOffset) {
 			// resolve the requested offset to a message that has been injected
 			const absoluteOffset : Long = isEarliest(soughtOffset) ? lowOffset() :
 				isLatest(soughtOffset) ? highOffset() :
@@ -163,12 +167,22 @@ const createContext = async function({
 			}
 		},
 
-		async send(messages: Array<{ topic: string, partition: number, value: any}>) : Promise<void> {
-			messages.forEach((message) => {
+		async send(messages) {
+			if (!Array.isArray(messages)) messages = [messages]
+			
+			return messages.map(createMessage).map((message) => {
 				producedMessages.push(message)
 
 				if (message.topic === assignment.topic && message.partition === assignment.partition) {
 					injectMessage(message)
+				}
+
+				return {
+					topicName: message.topic,
+					partition: message.partition,
+					errorCode: 0,
+					offset: message.offset.toString(),
+					timestamp: message.timestamp
 				}
 			})
 		},
@@ -180,7 +194,6 @@ const createContext = async function({
 			}
 		},
 
-		stream,
 		topic: assignment.topic,
 		partition: assignment.partition,
 		// TODO: decide if we want to support prefixes
@@ -188,47 +201,73 @@ const createContext = async function({
 		group: assignment.group
 	}
 
-	const initialMessages = initialState.messages.map(injectMessage)
+	const initialMessages = initialState.messages.map(createMessage).map(injectMessage)
 
-	const processedStream = await processors.reduce(async (s, setupProcessor) => {
-		const stream = await s
+	const controlledStream : Highland.Stream<Message> = stream.map((messageOrError) => {
+		if (messageOrError instanceof Error) {
+			throw (messageOrError as Error)
+		}
 
-		const processMessage = await setupProcessor(context)
-
-
-		return stream
-			.filter(({ offset }) => {
-				if (seekToOffset > -1) {
-					return Long.fromValue(offset).equals(seekToOffset)
-				} else {
-					return true
-				}
-			})
-			.map(async (message) => {
-				consumedOffset = Long.fromValue(message.offset).toNumber()
-				seekToOffset = -1
-				return await processMessage(message)
-			})
-			.flatMap((awaitingProcessing) => H(awaitingProcessing))
-	}, Promise.resolve(stream))
-
-	const processingResults = []
-	processedStream.each((result) => {
-		processingResults.push(result)
+		return messageOrError as InternalMessage
+	}).filter(({ offset }) => {
+		if (seekToOffset > -1) {
+			return Long.fromValue(offset).equals(seekToOffset)
+		} else {
+			return true
+		}
+	}).map((message: InternalMessage) => {
+		consumedOffset = Long.fromValue(message.offset).toNumber()
+		seekToOffset = -1
+		return {
+			...message,
+			offset: message.offset.toString(),
+			highWaterOffset: highOffset().toString()
+		}
 	})
 
+	const [processingPipeline, offsetsStream] = await createPipeline(assignmentContext, processors)
+	const processedStream = controlledStream.through(processingPipeline)
+
+	const processingResults = []
+	const processing = processedStream.tap((result) => {
+		processingResults.push(result)
+	}).last().toPromise(Promise)
+	const processedOffsets = []
+	offsetsStream.each((offset) => {
+		processedOffsets.push(offset)
+	})
+
+	function inject(payload: InjectMessagePayload) : Message
+	function inject(payload: Error): Error
+	function inject(payload: any) : any {
+		if (payload instanceof Error) {
+			injectError(payload)
+			return payload
+		} else {
+			let internal = createMessage(payload)
+			injectMessage(internal)
+			return {
+				...internal,
+				offset: internal.offset.toString(),
+				highWaterOffset: highOffset().toString()
+			}
+		}
+	}
+
 	return {
-		inject: injectMessage,
+		inject,
 		committedOffsets,
 		async caughtUp() {
-			await processedStream.observe()
-				.map(async () => context.caughtUp(consumedOffset))
+			await offsetsStream.observe()
+				.map(async (offset) => assignmentContext.caughtUp(`${offset}`))
 				.flatMap((awaiting) => H(awaiting))
 				.find((isCaughtUp) => isCaughtUp)
 				.toPromise(Promise)
 		},
 		initialMessages,
+		processing,
 		processingResults,
+		processedOffsets,
 		producedMessages
 	}
 }

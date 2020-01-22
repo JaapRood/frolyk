@@ -97,6 +97,7 @@ Tap.test('Task', async (t) => {
 				value: 'a-test-value'
 			}
 			const injectedMessage = testInterface.inject(testMessage)
+			await testInterface.caughtUp()
 
 			t.ok(messageProcessor.calledOnce)
 			t.ok(messageProcessor.calledWith(injectedMessage))

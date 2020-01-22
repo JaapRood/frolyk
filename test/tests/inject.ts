@@ -41,7 +41,9 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			t.type(injectedMessage.value, Buffer, 'injected message value is converted to a Buffer')
 			t.deepEqual(JSON.parse(injectedMessage.key.toString()), testMessage.key)
 			t.deepEqual(JSON.parse(injectedMessage.value.toString()), testMessage.value)
-
+			
+			await testInterface.caughtUp()
+			
 			t.ok(processMessage.calledWith(injectedMessage))
 		})
 
@@ -103,6 +105,15 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			}, 'does not allow a predefined offset that isnt higher than the last produced offset')
 
 
+		})
+
+		await t.test('can inject error', async () => {
+			const testError = new Error('error-to-test-handling')
+			testInterface.inject(testError)
+
+			t.rejects(async () => {
+				await testInterface.processing
+			}, 'error-to-test-handling', 'injected errors are propagated through the processing pipeline')
 		})
 	})
 
@@ -215,7 +226,9 @@ Tap.test('Injected AssignmentContext', async (t) => {
 		]
 
 		const testInterface = await testProcessor(async (assignment) => {
-			await assignment.send(testMessages)
+			const [firstMessage, ...otherMessages] = testMessages
+			await assignment.send(firstMessage)
+			await assignment.send(otherMessages)
 
 			return processMessage
 		})
@@ -223,7 +236,14 @@ Tap.test('Injected AssignmentContext', async (t) => {
 		const producedMessages = testInterface.producedMessages
 
 		t.ok(processMessage.calledOnce, 'injects any messages sent to test assignment back into processor')
-		t.deepEqual(testMessages, producedMessages, 'messages can be sent in assignment setup')
+		t.deepEqual(
+			testMessages, 
+			producedMessages.map(({ topic, partition, value }) => ({ 
+				topic, 
+				partition, 
+				value: JSON.parse(value.toString()) 
+			}))
+		, 'messages can be sent in assignment setup')
 	})
 
 	await t.test('assignment.seek', async (t) => {
