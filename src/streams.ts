@@ -2,6 +2,7 @@ import { Consumer, IHeaders } from 'kafkajs/types'
 import H from 'highland'
 import { Transform, TransformOptions } from 'stream'
 import { EventEmitter } from 'events'
+import { LogicalOffset, LogicalLiteralOffset, isEarliest, isLatest } from './offsets'
 import Long from 'long'
 import Invariant from 'invariant'
 
@@ -22,7 +23,7 @@ export interface TopicPartitionStream extends Transform {
     topic: string
     partition: number
 
-    seek(offset : string | Long) : void
+    seek(offset: string | Long | LogicalOffset | LogicalLiteralOffset) : void
 }
 
 class SeekOp {
@@ -77,7 +78,10 @@ class TPStream extends Transform implements TopicPartitionStream {
         }
     }
 
-    seek(offset: string | Long) {
+    seek(offset: string | Long | LogicalOffset | LogicalLiteralOffset) {
+        if (isEarliest(offset)) offset = LogicalOffset.Earliest
+        if (isLatest(offset)) offset = LogicalOffset.Latest
+
         try {
             offset = Long.fromValue(offset)
         } catch (parseError) {
