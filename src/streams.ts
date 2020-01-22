@@ -22,7 +22,7 @@ export interface TopicPartitionStream extends Transform {
     topic: string
     partition: number
 
-    seek(offset : string | Long) : void
+    seek(offset: string | Long) : void
 }
 
 class SeekOp {

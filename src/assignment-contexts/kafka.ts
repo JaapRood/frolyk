@@ -5,6 +5,7 @@ import Invariant from 'invariant'
 import _groupBy from 'lodash.groupby'
 
 import { TopicPartitionStream, Message } from '../streams'
+import { LogicalOffset, LogicalLiteralOffset, isEarliest, isLatest } from '../offsets'
 import { AssignmentContext } from './index'
 import { createPipeline } from '../processors'
 
@@ -94,8 +95,11 @@ export default async function createContext ({
         /* istanbul ignore next */
         async log(tags, payload) {},
         
-        seek(offset) {
-            return rawStream.seek(offset)
+        async seek(offset: string | Long | LogicalOffset | LogicalLiteralOffset) {
+            if (isEarliest(offset)) offset = (await fetchWatermarks()).low
+            if (isLatest(offset)) offset = (await fetchWatermarks()).high
+
+            return rawStream.seek(offset as string | Long)
         },
 
         async send(messages) {

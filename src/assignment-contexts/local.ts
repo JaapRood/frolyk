@@ -146,7 +146,7 @@ const createContext = async function({
 		/* istanbul ignore next */
 		log(tags, payload) {},
 
-		seek(soughtOffset : string | Long | LogicalOffset | LogicalLiteralOffset) {
+		async seek(soughtOffset : string | Long | LogicalOffset | LogicalLiteralOffset) {
 			// resolve the requested offset to a message that has been injected
 			const absoluteOffset : Long = isEarliest(soughtOffset) ? lowOffset() :
 				isLatest(soughtOffset) ? highOffset() :

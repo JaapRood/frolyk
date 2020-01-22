@@ -105,6 +105,8 @@ const setupAssignmentTests = (t, autoStart = true) => {
     }
 }
 
+Tap.setTimeout(60 * 1000)
+
 Tap.test('AssignmentContext.Kafka', async (t) => {
     await t.test('can be created', async (t) => {
         const testTopic = `topic-${secureRandom()}`
@@ -505,7 +507,7 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
     await t.test('assignment.seek', async (t) => {
         const { testAssignment, testProcessor } = setupAssignmentTests(t)
 
-        await t.test('will cause next message to be consumed to from sought to offst', async (t) => {
+        await t.test('will cause next message to be consumed to from sought to offset', async (t) => {
             const testMessages = Array(100).fill({}).map(() => ({
                 value: `value-${secureRandom()}`,
                 key: `value-${secureRandom()}`,
@@ -527,6 +529,112 @@ Tap.test('AssignmentContext.Kafka', async (t) => {
                         messagesConsumed++
                         if (messagesConsumed === 30) {
                             assignment.seek('20')
+                        }
+
+                        return message.offset
+                    }
+                }
+            ])
+
+            await produceMessages(testAssignment().topic, testMessages)
+
+            const processingResults = await context.stream
+                .take(expectedOffsets.length)
+                .collect()
+                .toPromise(Promise)
+
+            t.equivalent(processingResults, expectedOffsets)
+        })
+
+        await t.test('can seek to the beginning of a partition', async (t) => {
+            const testMessages = Array(50)
+                .fill({})
+                .map(() => {
+                    const value = secureRandom()
+                    return { key: `key-${value}`, value: `value-${value}`, partition: 0 }
+                })
+
+            const expectedOffsets = [
+                ...testMessages.slice(0, 30).map((msg, n) => `${n}`),
+                ...testMessages.slice(0, 30).map((msg, n) => `${n}`),
+                ...testMessages.slice(0, 30).map((msg, n) => `${n}`),
+                ...testMessages.map((msg, n) => `${n}`)
+            ]
+
+            const context = await testProcessor([
+                async (assignment) => {
+                    var messagesConsumed = 0
+
+                    return async (message) => {
+                        messagesConsumed++
+                        if (messagesConsumed === 30) {
+                            await assignment.seek('beginning')
+                        }
+
+                        if (messagesConsumed === 60) {
+                            await assignment.seek('earliest')
+                        }
+
+                        if (messagesConsumed === 90) {
+                            await assignment.seek('smallest')
+                        }
+
+                        return message.offset
+                    }
+                }
+            ])
+
+            await produceMessages(testAssignment().topic, testMessages)
+
+            const processingResults = await context.stream
+                .take(expectedOffsets.length)
+                .collect()
+                .toPromise(Promise)
+
+            t.equivalent(processingResults, expectedOffsets)
+        })
+
+        await t.test('can seek to the end of a partition', async (t) => {
+            const testMessages = Array(25)
+                .fill({})
+                .map(() => {
+                    const value = secureRandom()
+                    return { key: `key-${value}`, value: `value-${value}`, partition: 0 }
+                })
+
+            const expectedOffsets = [
+                ...testMessages.slice(0, 5).map((msg, n) => `${n}`),
+                ...testMessages.slice(0, 5).map((msg, n) => `${n + testMessages.length}`),
+                ...testMessages.slice(0, 5).map((msg, n) => `${n + testMessages.length * 2}`),
+                ...testMessages.map((msg, n) => `${n + testMessages.length * 3}`)
+            ]
+
+
+            const context = await testProcessor([
+                async (assignment) => {
+                    var messagesConsumed = 0
+
+                    return async (message) => {
+                        messagesConsumed++
+                        if (messagesConsumed === 5) {
+                            await assignment.seek('end')
+                            setTimeout(async () => {
+                                await produceMessages(testAssignment().topic, testMessages)
+                            }, 50)
+                        }
+
+                        if (messagesConsumed === 10) {
+                            await assignment.seek('latest')
+                            setTimeout(async () => {
+                                await produceMessages(testAssignment().topic, testMessages)
+                            }, 50)
+                        }
+
+                        if (messagesConsumed === 15) {
+                            await assignment.seek('largest')
+                            setTimeout(async () => {
+                                await produceMessages(testAssignment().topic, testMessages)
+                            }, 50)
                         }
 
                         return message.offset
