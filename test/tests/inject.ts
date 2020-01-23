@@ -2,6 +2,7 @@ import Tap from 'tap'
 import createLocalAssignmentContext, { AssignmentTestInterface } from '../../src/assignment-contexts/local'
 import { spy } from 'sinon'
 
+import { secureRandom } from '../helpers'
 
 Tap.test('Injected AssignmentContext', async (t) => {
 	let testAssignment = {
@@ -117,6 +118,27 @@ Tap.test('Injected AssignmentContext', async (t) => {
 		})
 	})
 
+	await t.test('testInterface.end will end processing with test interface', async (t) => {
+		const testMessages = Array(100).fill({}).map(() => ({
+			topic: testAssignment.topic,
+			partition: 0,
+			value: `value-${secureRandom()}`,
+			key: `value-${secureRandom()}`
+		}))
+		
+		const testInterface = await testProcessor(async (assignment) => async (message) => {
+			await new Promise((r) => setTimeout(r, 10))
+			return message.offset
+		})
+
+		const injectedMessages = testMessages.map((msg) => testInterface.inject(msg))
+		await testInterface.end()
+
+		t.equivalent(
+			injectedMessages.map((msg) => msg.offset),
+			testInterface.processingResults
+		, 'completes once all processing has finished')
+	})
 
 	await t.test('assignment.watermarks', async (t) => {
 		const processMessage = spy()

@@ -11,6 +11,7 @@ export interface AssignmentTestInterface {
 	committedOffsets: OffsetAndMetadata[],
 	initialMessages: Message[],
 	caughtUp() : Promise<void>,
+	end(): Promise<void>,
 	processing: Promise<void>,
 	processingResults: any[],
 	processedOffsets: string[],
@@ -263,6 +264,10 @@ const createContext = async function({
 				.flatMap((awaiting) => H(awaiting))
 				.find((isCaughtUp) => isCaughtUp)
 				.toPromise(Promise)
+		},
+		async end() {
+			stream.end()
+			await processing
 		},
 		initialMessages,
 		processing,
