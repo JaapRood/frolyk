@@ -59,6 +59,16 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			t.equal(injectedMessage.value, null)
 		})
 
+		await t.test('can inject a message without a topic or partition', async () => {
+			const testMessage = {}
+			const injectedMessage = testInterface.inject(testMessage)
+
+			t.equal(injectedMessage.topic, testAssignment.topic)
+			t.equal(injectedMessage.partition, testAssignment.partition)
+			t.equal(injectedMessage.key, null)
+			t.equal(injectedMessage.value, null)
+		})
+
 		await t.test('can inject a message with a Buffer key or value', async () => {
 			const testMessage = {
 				topic: testAssignment.topic,
@@ -104,8 +114,6 @@ Tap.test('Injected AssignmentContext', async (t) => {
 			t.throws(() => {
 				testInterface.inject( testInterface.inject({ ...testMessage, offset: '6' }))
 			}, 'does not allow a predefined offset that isnt higher than the last produced offset')
-
-
 		})
 
 		await t.test('can inject error', async () => {
@@ -120,8 +128,6 @@ Tap.test('Injected AssignmentContext', async (t) => {
 
 	await t.test('testInterface.end will end processing with test interface', async (t) => {
 		const testMessages = Array(100).fill({}).map(() => ({
-			topic: testAssignment.topic,
-			partition: 0,
 			value: `value-${secureRandom()}`,
 			key: `value-${secureRandom()}`
 		}))

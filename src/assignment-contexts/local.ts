@@ -7,7 +7,8 @@ import { createPipeline } from '../processors'
 import { Message } from '../streams'
 
 export interface AssignmentTestInterface {
-	inject(payload: { topic: string, partition: number, value: any })
+	inject(payload: InjectMessagePayload): Message,
+	inject(payload: Error): Error,
 	committedOffsets: OffsetAndMetadata[],
 	initialMessages: Message[],
 	caughtUp() : Promise<void>,
@@ -28,7 +29,7 @@ interface InternalMessage {
 }
 
 interface InjectMessagePayload {
-	topic: string,
+	topic?: string,
 	partition?: number,
 	value?: any,
 	key?: any,
@@ -79,8 +80,9 @@ const createContext = async function({
 		producedOffset = offset.toNumber()
 
 		return {
-			partition: 0,
+			partition: assignment.partition,
 			timestamp: `${Date.now()}`,
+			topic: assignment.topic,
 			...payload,
 			value,
 			key,

@@ -146,7 +146,7 @@ Tap.test('Processor pipeline', async (t) => {
 
         const testContext = await testProcessor([ processMessageOne, processMessageTwo ])
 
-        const injectedMessages = testMessages.map(testContext.inject)
+        const injectedMessages = testMessages.map((msg) => testContext.inject(msg))
         await testContext.caughtUp()
 
         t.equal(testContext.processingResults.length, testMessages.length - 1)
