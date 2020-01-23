@@ -1,6 +1,7 @@
 import Tap from 'tap'
 import createLocalAssignmentContext, { AssignmentTestInterface } from '../../src/assignment-contexts/local'
 import { spy } from 'sinon'
+import Long from 'long'
 
 import { secureRandom } from '../helpers'
 
@@ -10,11 +11,12 @@ Tap.test('Injected AssignmentContext', async (t) => {
 		partition: 0,
 		group: 'test-group'
 	}
-	const testProcessor = (setupProcessor, assignment = testAssignment, initialState = {}) => {
+	const testProcessor = (setupProcessor, assignment = testAssignment, initialState = {}, sourceOptions={}) => {
 		return createLocalAssignmentContext({
 			assignment,
 			processors: [ setupProcessor ],
-			initialState
+			initialState,
+			...sourceOptions
 		})
 	}
 
@@ -342,18 +344,68 @@ Tap.test('Injected AssignmentContext', async (t) => {
 		await testInterface.caughtUp()
 
 		t.deepEqual(testInterface.processingResults, ['4'], 'will seek to next available offset when seeking to an offset that no longer exists (gc)')
-
+		
 		testInterface = await testProcessor(async (assignment) => {
-			await assignment.seek('3')
+			await assignment.seek('5')
 
 			return processMessage
 		}, testAssignment, {
 			messages: testMessages
 		})
 
-		await testInterface.caughtUp()
+		testInterface.inject({
+			value: 'a-test-value-d'
+		})
+		await testInterface.end()
 
-		t.deepEqual(testInterface.processingResults, ['2'], 'will seek to the high water mark when offset is out of range')
+		t.deepEqual(testInterface.processingResults, ['3'], 'will seek to the high water mark by default when offset is beyond offset range')
+
+		testInterface = await testProcessor(async (assignment) => {
+			await assignment.seek('0')
+
+			return processMessage
+		}, testAssignment, {
+			lowOffset: '2',
+			messages: testMessages.map((msg) => ({
+				...msg,
+				offset: Long.fromValue(msg.offset).add(2).toString()
+			}))
+		})
+
+		testInterface.inject({
+			value: 'a-test-value-d'
+		})
+		await testInterface.end()
+
+		t.deepEqual(testInterface.processingResults, [`${testMessages.length + 2}`], 'will seek to the high water mark by default when offset is before offset range')
+		
+		testInterface = await testProcessor(async (assignment) => {
+			await assignment.seek('5')
+
+			return processMessage
+		}, testAssignment, {
+			messages: testMessages
+		}, { offsetReset: 'earliest' })
+
+		await testInterface.end()
+
+		t.deepEqual(testInterface.processingResults, ['0', '1', '2'], 'will seek to the lower water mark when offsetReset set to earliest when offset is beyond offset range')
+		
+		testInterface = await testProcessor(async (assignment) => {
+			await assignment.seek('1')
+
+			return processMessage
+		}, testAssignment, {
+			lowOffset: '2',
+			messages: testMessages.map((msg) => ({
+				...msg,
+				offset: Long.fromValue(msg.offset).add(2).toString()
+			}))
+		}, { offsetReset: 'earliest' })
+
+		await testInterface.end()
+
+		t.deepEqual(testInterface.processingResults, ['2', '3', '4'], 'will seek to the lower water mark when offsetReset set to earliest when offset is before offset range')
 
 		testInterface = await testProcessor(async (assignment) => {
 			let processedMessages = 0
@@ -374,22 +426,20 @@ Tap.test('Injected AssignmentContext', async (t) => {
 		t.deepEqual(testInterface.processingResults, ['0', '1', '0', '1', '2'], 'allows logical seeking to the earliest offset')
 
 		testInterface = await testProcessor(async (assignment) => {
-			let processedMessages = 0
+			await assignment.seek('latest')
 
-			return async (message) => {
-				processedMessages++
-				if (processedMessages === 1) {
-					await assignment.seek('latest')
-				}
-				return message.offset
-			} 
+			return processMessage
 		}, testAssignment, {
 			messages: testMessages
 		})
 
-		await testInterface.caughtUp()
+		testInterface.inject({
+			value: 'a-test-value-d'
+		})
 
-		t.deepEqual(testInterface.processingResults, ['0', '2'], 'allows logical seeking to the latest offset')
+		await testInterface.end()
+
+		t.deepEqual(testInterface.processingResults, ['3'], 'allows logical seeking to the latest offset')
 	})
 
 	await t.test('assignment.commitOffset', async (t) => {

@@ -40,10 +40,12 @@ interface InjectMessagePayload {
 const createContext = async function({
 	assignment,
 	processors,
+	offsetReset,
 	initialState
 }:{ 
 	assignment: any,
 	processors: any, 
+	offsetReset?: LogicalLiteralOffset | LogicalOffset,
 	initialState?: any
 }) : Promise<AssignmentTestInterface> {
 
@@ -52,6 +54,8 @@ const createContext = async function({
 		messages: [],
 		...(initialState || {})
 	}
+
+	if (!offsetReset) offsetReset = LogicalOffset.Latest
 
 	let producedOffset : number = initialState.lowOffset - 1
 	let consumedOffset : number = initialState.lowOffset - 1
@@ -154,18 +158,24 @@ const createContext = async function({
 			const absoluteOffset : Long = isEarliest(soughtOffset) ? lowOffset() :
 				isLatest(soughtOffset) ? highOffset() :
 				Long.fromValue(soughtOffset)
-			const closestIndex = injectedMessages.findIndex(({ offset }) => offset.gte(absoluteOffset))
-			const soughtIndex = closestIndex > -1 ? closestIndex : 
-				injectedMessages.length - 1 // default to high water
-			const nextMessage = injectedMessages[soughtIndex]
+			const outOfRange = absoluteOffset < lowOffset() || absoluteOffset >= highOffset()
+			let closestIndex = injectedMessages.findIndex(({ offset }) => offset.gte(absoluteOffset))
 
-			// update the offset we're currently consuming or reset to start or end
-			seekToOffset = Long.fromValue(nextMessage.offset).toNumber()
+			/* istanbul ignore else */
+			if (!outOfRange && closestIndex > -1) {
+				let nextMessage = injectedMessages[closestIndex]
+				// update the offset we're currently consuming or reset to start or end
+				seekToOffset = Long.fromValue(nextMessage.offset).toNumber()
+			} else if (isLatest(soughtOffset) || isLatest(offsetReset)) {
+				seekToOffset = highOffset().toNumber()
+			} else if (isEarliest(soughtOffset) || isEarliest(offsetReset)) {
+				seekToOffset = lowOffset().toNumber()
+			}
 
 			// replay any messages if necessary
 			if (consumedOffset >= seekToOffset) {
 				setTimeout(() => { // out of context, to make sure seek completes before we process all th new messages
-					injectedMessages.slice(soughtIndex).forEach(writeMessageToStream)
+					injectedMessages.slice(closestIndex).forEach(writeMessageToStream)
 				})
 			}
 		},
