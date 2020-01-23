@@ -1,6 +1,6 @@
 {
   "name": "frolyk",
-  "version": "1.0.0",
+  "version": "1.1.0-beta.0",
   "description": "Stream processing library for Kafka in Node",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
