@@ -1,7 +1,8 @@
 # Kafka Stream Processing library for Node
 
-Total work in progress, nothing functional yet, but eventually like [Kafka Streams Processor API](https://kafka.apache.org/10/documentation/streams/developer-guide/processor-api.html).
+A Node.js interpretation of the [Kafka Streams Processor API](https://kafka.apache.org/10/documentation/streams/developer-guide/processor-api.html).
 
+Frolyk provides a minimal layer over Kafka, to effectively write, test and run stream processing applications. It follows a `task` based concept, where `sources` (kafka topics) flow through user-defined `processors` to generate results, either back to Kafka or some other store. It aims to enable both **stateless** and **stateful** processing, leveraging Kafka ConsumerGroups to spread these tasks between workers.
 
 ## Initial goals
 
@@ -15,10 +16,11 @@ Total work in progress, nothing functional yet, but eventually like [Kafka Strea
 - [x] 100% Test coverage
 
 ## Later goals
+
 - [ ] Simple `Worker` / `App` construct to run multiple tasks in a single process
 - [ ] Basic message parsing
 - [ ] Support long-running processing jobs (> session timeout through heartbeating / pause & resume)
 - [ ] Replace Highland streams with custom Node Streams
-- [ ] Very *very* few dependencies: KafkaJS, Long?
+- [ ] Very _very_ few dependencies: KafkaJS, Long?
 - [ ] Basic store support
 - [ ] Basic scheduling / windowing
