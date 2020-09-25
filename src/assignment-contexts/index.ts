@@ -45,8 +45,11 @@ export interface ProducedMessageMetadata {
 	topicName: string,
 	partition: number,
 	errorCode: number,
-	offset: string,
-	timestamp: string
+	offset?: string,
+	timestamp?: string,
+	baseOffset?: string,
+	logAppendTime?: string,
+	logStartOffset?: string
 }
 
 export interface Watermarks {

@@ -29,7 +29,7 @@
   "dependencies": {
     "highland": "^2.13.5",
     "invariant": "^2.2.4",
-    "kafkajs": "^1.12.0-beta.11",
+    "kafkajs": "^1.14.0",
     "lodash.flatmap": "^4.5.0",
     "lodash.groupby": "^4.6.0",
     "long": "^4.0.0",
